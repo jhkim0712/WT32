@@ -28,14 +28,16 @@ static const char *TAG = "app_web";
 #define MAX_BODY_LEN 4096
 #define OTA_UPLOAD_CHUNK 2048
 
-/* Embedded web assets - symbol names are derived from the EMBED_FILES path
- * in CMakeLists.txt ("webapp/index.html" -> _binary_webapp_index_html_*). */
-extern const uint8_t webapp_index_html_start[] asm("_binary_webapp_index_html_start");
-extern const uint8_t webapp_index_html_end[]   asm("_binary_webapp_index_html_end");
-extern const uint8_t webapp_style_css_start[]  asm("_binary_webapp_style_css_start");
-extern const uint8_t webapp_style_css_end[]    asm("_binary_webapp_style_css_end");
-extern const uint8_t webapp_app_js_start[]     asm("_binary_webapp_app_js_start");
-extern const uint8_t webapp_app_js_end[]       asm("_binary_webapp_app_js_end");
+/* Embedded web assets - the build system's EMBED_FILES symbol is derived
+ * from just the base filename (directory stripped), not the full
+ * "webapp/..." path passed in CMakeLists.txt - see
+ * tools/cmake/scripts/data_file_embed_asm.cmake in ESP-IDF. */
+extern const uint8_t webapp_index_html_start[] asm("_binary_index_html_start");
+extern const uint8_t webapp_index_html_end[]   asm("_binary_index_html_end");
+extern const uint8_t webapp_style_css_start[]  asm("_binary_style_css_start");
+extern const uint8_t webapp_style_css_end[]    asm("_binary_style_css_end");
+extern const uint8_t webapp_app_js_start[]     asm("_binary_app_js_start");
+extern const uint8_t webapp_app_js_end[]       asm("_binary_app_js_end");
 
 /* ---------------------------------------------------------------------- */
 /* Helpers                                                                 */
