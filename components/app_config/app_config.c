@@ -9,7 +9,7 @@ static const char *TAG = "app_config";
 static const char *NVS_NAMESPACE = "wt32cfg";
 
 /* One NVS key per field (<=15 chars, the NVS limit). Adding a field to
- * app_config_t just means adding its key here plus a load_*/save_* line
+ * app_config_t just means adding its key here plus a load_xxx()/save call
  * below - a device that hasn't seen the new key yet simply gets the
  * default from app_config_reset_defaults(), every other stored setting is
  * untouched. See the doc comment in app_config.h. */
