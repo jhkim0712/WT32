@@ -2,10 +2,14 @@
  * @file app_config.h
  * @brief Single source of truth for user-configurable settings.
  *
- * The whole struct is persisted to NVS as one binary blob (namespace
- * "wt32cfg", key "cfg"). This keeps app_config.c tiny; if you add a field,
- * bump APP_CONFIG_VERSION so old, incompatible blobs are discarded instead
- * of being reinterpreted as garbage.
+ * Each field is persisted to NVS under its own key (namespace "wt32cfg"),
+ * not as one monolithic blob. This makes schema evolution safe: a firmware
+ * update that adds a field just introduces a new key - app_config_load()
+ * leaves any key that isn't found (yet) at the default set by
+ * app_config_reset_defaults(), instead of discarding every other setting
+ * the user already configured (Wi-Fi credentials included). When adding a
+ * field, just add its NVS key + load/save calls in app_config.c; no version
+ * bump or migration step needed.
  */
 #pragma once
 
@@ -16,8 +20,6 @@
 #ifdef __cplusplus
 extern "C" {
 #endif
-
-#define APP_CONFIG_VERSION      5
 
 #define APP_CFG_SSID_MAX_LEN    32
 #define APP_CFG_PASS_MAX_LEN    64
@@ -30,8 +32,6 @@ typedef enum {
 } clock_face_t;
 
 typedef struct {
-    uint32_t version;
-
     /* --- Wi-Fi / network --- */
     char     wifi_ssid[APP_CFG_SSID_MAX_LEN];
     char     wifi_password[APP_CFG_PASS_MAX_LEN];
@@ -67,10 +67,10 @@ typedef struct {
     bool     first_boot_done;
 } app_config_t;
 
-/** Load config from NVS, or populate sane defaults if none is stored / it is stale. */
+/** Load config from NVS (per-key); any key not yet stored keeps its default. */
 esp_err_t app_config_load(void);
 
-/** Persist the current in-RAM config to NVS. */
+/** Persist the current in-RAM config to NVS, one key per field. */
 esp_err_t app_config_save(void);
 
 /** @return pointer to the live, in-RAM configuration (do not free). */
@@ -79,7 +79,7 @@ app_config_t *app_config_get(void);
 /** Reset to factory defaults (in RAM) - caller must still call app_config_save(). */
 void app_config_reset_defaults(app_config_t *cfg);
 
-/** Erase the persisted config blob from NVS entirely. */
+/** Erase all persisted config keys from NVS entirely. */
 esp_err_t app_config_erase(void);
 
 #ifdef __cplusplus

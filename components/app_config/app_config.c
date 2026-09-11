@@ -7,14 +7,35 @@
 
 static const char *TAG = "app_config";
 static const char *NVS_NAMESPACE = "wt32cfg";
-static const char *NVS_KEY = "cfg";
+
+/* One NVS key per field (<=15 chars, the NVS limit). Adding a field to
+ * app_config_t just means adding its key here plus a load_*/save_* line
+ * below - a device that hasn't seen the new key yet simply gets the
+ * default from app_config_reset_defaults(), every other stored setting is
+ * untouched. See the doc comment in app_config.h. */
+#define KEY_WIFI_SSID    "wifi_ssid"
+#define KEY_WIFI_PASS    "wifi_pass"
+#define KEY_HOSTNAME     "hostname"
+#define KEY_AP_PASS      "ap_pass"
+#define KEY_TZ_POSIX     "tz_posix"
+#define KEY_NTP_SERVER   "ntp_server"
+#define KEY_TIME_24H     "time_24h"
+#define KEY_CLOCK_FACE   "clock_face"
+#define KEY_CHIME_EN     "chime_en"
+#define KEY_BRIGHTNESS   "bright"
+#define KEY_AUTO_CYCLE   "auto_cyc"
+#define KEY_CYCLE_SEC    "cyc_sec"
+#define KEY_ALB_INT      "alb_int"
+#define KEY_ALB_SHUFFLE  "alb_shuf"
+#define KEY_AUD_MUTED    "aud_mute"
+#define KEY_GH_REPO      "gh_repo"
+#define KEY_FIRST_BOOT   "first_boot"
 
 static app_config_t s_cfg;
 
 void app_config_reset_defaults(app_config_t *cfg)
 {
     memset(cfg, 0, sizeof(*cfg));
-    cfg->version = APP_CONFIG_VERSION;
 
     cfg->wifi_ssid[0] = '\0';
     cfg->wifi_password[0] = '\0';
@@ -41,28 +62,82 @@ void app_config_reset_defaults(app_config_t *cfg)
     cfg->first_boot_done = false;
 }
 
+/* --- small per-type helpers: leave *out untouched (i.e. keep whatever
+ * default app_config_reset_defaults() already put there) if the key isn't
+ * present in NVS yet, so partial/older stored configs load fine. --- */
+
+static void load_str(nvs_handle_t h, const char *key, char *out, size_t out_len)
+{
+    size_t len = out_len;
+    esp_err_t ret = nvs_get_str(h, key, out, &len);
+    if (ret != ESP_OK && ret != ESP_ERR_NVS_NOT_FOUND) {
+        ESP_LOGW(TAG, "get_str(%s) failed: %s", key, esp_err_to_name(ret));
+    }
+}
+
+static void load_u8(nvs_handle_t h, const char *key, uint8_t *out)
+{
+    esp_err_t ret = nvs_get_u8(h, key, out);
+    if (ret != ESP_OK && ret != ESP_ERR_NVS_NOT_FOUND) {
+        ESP_LOGW(TAG, "get_u8(%s) failed: %s", key, esp_err_to_name(ret));
+    }
+}
+
+static void load_bool(nvs_handle_t h, const char *key, bool *out)
+{
+    uint8_t v = *out ? 1 : 0;
+    load_u8(h, key, &v);
+    *out = (v != 0);
+}
+
+static void load_u16(nvs_handle_t h, const char *key, uint16_t *out)
+{
+    esp_err_t ret = nvs_get_u16(h, key, out);
+    if (ret != ESP_OK && ret != ESP_ERR_NVS_NOT_FOUND) {
+        ESP_LOGW(TAG, "get_u16(%s) failed: %s", key, esp_err_to_name(ret));
+    }
+}
+
 esp_err_t app_config_load(void)
 {
+    app_config_reset_defaults(&s_cfg);
+
     nvs_handle_t handle;
     esp_err_t ret = nvs_open(NVS_NAMESPACE, NVS_READONLY, &handle);
     if (ret != ESP_OK) {
         ESP_LOGI(TAG, "No stored config found, using defaults (%s)", esp_err_to_name(ret));
-        app_config_reset_defaults(&s_cfg);
         return ESP_OK;
     }
 
-    app_config_t loaded;
-    size_t len = sizeof(loaded);
-    ret = nvs_get_blob(handle, NVS_KEY, &loaded, &len);
+    load_str(handle, KEY_WIFI_SSID, s_cfg.wifi_ssid, sizeof(s_cfg.wifi_ssid));
+    load_str(handle, KEY_WIFI_PASS, s_cfg.wifi_password, sizeof(s_cfg.wifi_password));
+    load_str(handle, KEY_HOSTNAME, s_cfg.hostname, sizeof(s_cfg.hostname));
+    load_str(handle, KEY_AP_PASS, s_cfg.ap_password, sizeof(s_cfg.ap_password));
+
+    load_str(handle, KEY_TZ_POSIX, s_cfg.tz_posix, sizeof(s_cfg.tz_posix));
+    load_str(handle, KEY_NTP_SERVER, s_cfg.ntp_server, sizeof(s_cfg.ntp_server));
+    load_bool(handle, KEY_TIME_24H, &s_cfg.time_24h);
+    {
+        uint8_t face = (uint8_t)s_cfg.clock_face;
+        load_u8(handle, KEY_CLOCK_FACE, &face);
+        s_cfg.clock_face = (clock_face_t)face;
+    }
+    load_bool(handle, KEY_CHIME_EN, &s_cfg.chime_enabled);
+
+    load_u8(handle, KEY_BRIGHTNESS, &s_cfg.brightness);
+    load_bool(handle, KEY_AUTO_CYCLE, &s_cfg.auto_cycle_enabled);
+    load_u16(handle, KEY_CYCLE_SEC, &s_cfg.cycle_seconds);
+
+    load_u16(handle, KEY_ALB_INT, &s_cfg.album_interval_s);
+    load_bool(handle, KEY_ALB_SHUFFLE, &s_cfg.album_shuffle);
+
+    load_bool(handle, KEY_AUD_MUTED, &s_cfg.audio_muted);
+
+    load_str(handle, KEY_GH_REPO, s_cfg.github_repo, sizeof(s_cfg.github_repo));
+
+    load_bool(handle, KEY_FIRST_BOOT, &s_cfg.first_boot_done);
+
     nvs_close(handle);
-
-    if (ret != ESP_OK || len != sizeof(loaded) || loaded.version != APP_CONFIG_VERSION) {
-        ESP_LOGW(TAG, "Stored config missing/incompatible, resetting to defaults");
-        app_config_reset_defaults(&s_cfg);
-        return ESP_OK;
-    }
-
-    s_cfg = loaded;
     ESP_LOGI(TAG, "Config loaded from NVS (host=%s)", s_cfg.hostname);
     return ESP_OK;
 }
@@ -76,14 +151,47 @@ esp_err_t app_config_save(void)
         return ret;
     }
 
-    ret = nvs_set_blob(handle, NVS_KEY, &s_cfg, sizeof(s_cfg));
-    if (ret == ESP_OK) {
-        ret = nvs_commit(handle);
-    }
+    /* Each nvs_set_* is its own atomic write; only the final nvs_commit()
+     * flushes them to flash. Keep going on a single field's failure so one
+     * bad key doesn't stop the rest of the config from being saved, but
+     * remember it happened so we can report a non-OK overall result. */
+    esp_err_t first_err = ESP_OK;
+#define CHECK(expr) do { esp_err_t _e = (expr); if (_e != ESP_OK && first_err == ESP_OK) first_err = _e; } while (0)
+
+    CHECK(nvs_set_str(handle, KEY_WIFI_SSID, s_cfg.wifi_ssid));
+    CHECK(nvs_set_str(handle, KEY_WIFI_PASS, s_cfg.wifi_password));
+    CHECK(nvs_set_str(handle, KEY_HOSTNAME, s_cfg.hostname));
+    CHECK(nvs_set_str(handle, KEY_AP_PASS, s_cfg.ap_password));
+
+    CHECK(nvs_set_str(handle, KEY_TZ_POSIX, s_cfg.tz_posix));
+    CHECK(nvs_set_str(handle, KEY_NTP_SERVER, s_cfg.ntp_server));
+    CHECK(nvs_set_u8(handle, KEY_TIME_24H, s_cfg.time_24h ? 1 : 0));
+    CHECK(nvs_set_u8(handle, KEY_CLOCK_FACE, (uint8_t)s_cfg.clock_face));
+    CHECK(nvs_set_u8(handle, KEY_CHIME_EN, s_cfg.chime_enabled ? 1 : 0));
+
+    CHECK(nvs_set_u8(handle, KEY_BRIGHTNESS, s_cfg.brightness));
+    CHECK(nvs_set_u8(handle, KEY_AUTO_CYCLE, s_cfg.auto_cycle_enabled ? 1 : 0));
+    CHECK(nvs_set_u16(handle, KEY_CYCLE_SEC, s_cfg.cycle_seconds));
+
+    CHECK(nvs_set_u16(handle, KEY_ALB_INT, s_cfg.album_interval_s));
+    CHECK(nvs_set_u8(handle, KEY_ALB_SHUFFLE, s_cfg.album_shuffle ? 1 : 0));
+
+    CHECK(nvs_set_u8(handle, KEY_AUD_MUTED, s_cfg.audio_muted ? 1 : 0));
+
+    CHECK(nvs_set_str(handle, KEY_GH_REPO, s_cfg.github_repo));
+
+    CHECK(nvs_set_u8(handle, KEY_FIRST_BOOT, s_cfg.first_boot_done ? 1 : 0));
+#undef CHECK
+
+    ret = nvs_commit(handle);
     nvs_close(handle);
 
+    if (first_err != ESP_OK) {
+        ESP_LOGE(TAG, "One or more config fields failed to save: %s", esp_err_to_name(first_err));
+        return first_err;
+    }
     if (ret != ESP_OK) {
-        ESP_LOGE(TAG, "Failed to save config: %s", esp_err_to_name(ret));
+        ESP_LOGE(TAG, "Failed to commit config: %s", esp_err_to_name(ret));
     }
     return ret;
 }
