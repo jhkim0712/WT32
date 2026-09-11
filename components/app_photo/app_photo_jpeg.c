@@ -58,14 +58,14 @@ esp_err_t app_photo_jpeg_decode_native(const char *path, uint16_t **out_buf, uin
     };
     esp_jpeg_image_output_t out_img = {0};
 
-    esp_err_t ret = esp_jpeg_get_image_size(&cfg, &out_img);
+    esp_err_t ret = esp_jpeg_get_image_info(&cfg, &out_img);
     if (ret != ESP_OK) {
         ESP_LOGW(TAG, "%s: failed to parse JPEG header (%s)", path, esp_err_to_name(ret));
         free(jpg_data);
         return ret;
     }
 
-    size_t out_size = (size_t)out_img.width * out_img.height * sizeof(uint16_t);
+    size_t out_size = out_img.output_len;
     if (out_size == 0 || out_size > PHOTO_MAX_DECODE_BYTES) {
         ESP_LOGW(TAG, "%s: %dx%d is too large to decode (limit %d bytes)", path, out_img.width, out_img.height,
                   PHOTO_MAX_DECODE_BYTES);
