@@ -1,0 +1,46 @@
+name: Build firmware
+
+# Builds after a PR merges into main (the "push" trigger below), and also on
+# every PR so a broken build is caught before merge rather than after. The
+# ESP-IDF version pinned here (release-v6.1) should track the version in
+# README.md / .devcontainer.
+on:
+  push:
+    branches: [ "main" ]
+  pull_request:
+    branches: [ "main" ]
+  workflow_dispatch:
+
+concurrency:
+  group: build-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    container:
+      image: espressif/idf:release-v6.1
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Build firmware (esp32s3)
+        shell: bash
+        run: |
+          . "$IDF_PATH/export.sh"
+          idf.py set-target esp32s3
+          idf.py build
+
+      - name: Upload firmware artifact
+        if: success()
+        uses: actions/upload-artifact@v4
+        with:
+          name: wt32_smalltv-firmware
+          path: |
+            build/wt32_smalltv.bin
+            build/bootloader/bootloader.bin
+            build/partition_table/partition-table.bin
+            build/ota_data_initial.bin
+            build/flasher_args.json
+          if-no-files-found: error
+          retention-days: 30

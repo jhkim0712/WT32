@@ -9,6 +9,7 @@ a phone or laptop through a built-in web page - no app, no cloud account.
 
 > 한국어 안내는 [README.ko.md](README.ko.md) 를 참고하세요.
 
+![build](https://github.com/jhkim0712/WT32/actions/workflows/build.yml/badge.svg)
 ![status](https://img.shields.io/badge/status-early--access-orange)
 ![license](https://img.shields.io/badge/license-MIT-blue)
 
