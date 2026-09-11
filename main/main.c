@@ -1,6 +1,6 @@
 /**
  * @file main.c
- * @brief WT32-SC01 Plus "SmallTV" firmware entry point.
+ * @brief WT32-SC01 Plus firmware entry point.
  *
  * Bring-up order matters here:
  *   1. NVS (everything else persists through it)
@@ -74,5 +74,5 @@ void app_main(void)
      * bootloader stops treating it as "pending verify" (see app_ota.h). */
     app_ota_confirm_boot();
 
-    ESP_LOGI(TAG, "WT32 SmallTV ready");
+    ESP_LOGI(TAG, "WT32 firmware ready");
 }

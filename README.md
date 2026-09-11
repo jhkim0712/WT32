@@ -1,11 +1,11 @@
-# WT32 SmallTV
+# WT32
 
 A small, self-hosted **desk clock / digital photo frame** firmware for the
 [WT32-SC01 Plus](docs/WT32-SC01-PLUS_Datasheet-V1.9+EN.pdf) (ESP32-S3 + 3.5"
-480x320 touch LCD), written in plain C on top of ESP-IDF and LVGL. It's a
-homage to the **GeekMagic SmallTV Ultra**: swipe between a clock, a photo
-slideshow from a microSD card, and a device-info screen, all configured from
-a phone or laptop through a built-in web page - no app, no cloud account.
+480x320 touch LCD), written in plain C on top of ESP-IDF and LVGL. Swipe
+between a clock, a photo slideshow from a microSD card, and a device-info
+screen, all configured from a phone or laptop through a built-in web page -
+no app, no cloud account.
 
 > 한국어 안내는 [README.ko.md](README.ko.md) 를 참고하세요.
 
@@ -16,8 +16,8 @@ a phone or laptop through a built-in web page - no app, no cloud account.
 ## Features
 
 - **Clock screen** - large digital time + date, auto-updated from SNTP.
-- **Photo album** - slideshow of `.bmp` / `.jpg` images from a microSD card,
-  swipe or tap to advance, configurable interval and shuffle.
+- **Photo album** - slideshow of `.bmp` / `.jpg` / `.png` images from a
+  microSD card, swipe or tap to advance, configurable interval and shuffle.
 - **Device info screen** - IP address, Wi-Fi signal, SD card status, uptime,
   free heap, firmware version.
 - **Swipe navigation** between screens, plus an optional auto-cycle timer.
@@ -28,11 +28,14 @@ a phone or laptop through a built-in web page - no app, no cloud account.
   - Timezone (POSIX TZ string), NTP server, 12h/24h format, hourly chime.
   - Brightness, auto-cycle, mute.
   - Photo album interval/shuffle.
-  - Hostname, restart, factory reset.
+  - Hostname, restart, factory reset, fallback AP password.
+  - **File manager**: browse, upload, download/view, rename and delete
+    anything on the microSD card, right from the browser (no separate app
+    needed to load photos onto it).
   - **Firmware updates**: upload a `.bin` file directly, or check a GitHub
     repo's releases and install with one click - see [Firmware updates](#firmware-updates).
 - Reachable by IP or via mDNS (`http://<hostname>.local/`, default
-  `wt32-smalltv.local`).
+  `wt32.local`).
 - Boot / UI chime through the onboard I2S amplifier.
 
 ## Hardware
@@ -79,41 +82,46 @@ cJSON managed-component split in `app_web`/`app_ota`.
 . $IDF_PATH/export.sh
 idf.py set-target esp32s3
 idf.py build
-idf.py -p <PORT> flash monitor
+idf.py -p <PORT> -b 921600 flash monitor
 ```
+
+(`-b 921600` just raises the flashing baud rate - drop it if your USB-serial
+adapter doesn't like it. The VS Code ESP-IDF extension has its own
+equivalent setting, `idf.flashBaudRate`, in `.vscode/settings.json`.)
 
 The component manager will fetch the managed dependencies
 (`lvgl`, `esp_lvgl_port`, `esp_lcd_st7796`, `esp_lcd_touch_ft5x06`,
-`esp_jpeg`) on the first build.
-
-A `.devcontainer/` is included if you prefer building inside the official
-`espressif/idf` Docker image via VS Code Dev Containers.
+`esp_jpeg`, `libpng`) on the first build.
 
 ## First boot / configuration
 
 1. Flash the firmware and power the board.
-2. The Info screen (swipe to it) shows a SoftAP name like
-   `WT32-SmallTV-AB12` and the password `smalltv1234`. Connect a phone or
-   laptop to it (most phones will pop up a captive-portal prompt
-   automatically; otherwise open `http://192.168.4.1/`).
+2. The Info screen (swipe to it) shows a SoftAP name like `WT32-A1B2C3`
+   (the last 3 octets of its MAC address) with **no password** (open
+   network) by default. Connect a phone or laptop to it (most phones will
+   pop up a captive-portal prompt automatically; otherwise open
+   `http://192.168.4.1/`).
 3. Open the **Wi-Fi** tab, scan, pick your network, enter its password and
    press *Connect*. On success the device joins your network and the
    settings persist across reboots.
 4. The SoftAP (and its captive portal) stay available at all times as a
    fallback, so the web UI is always reachable even if the home network is
    down - either via the AP or via `http://<device-ip>/` /
-   `http://wt32-smalltv.local/` once joined.
+   `http://wt32.local/` once joined. You can give the fallback AP a password
+   from the **System** tab if an open network next to it makes you uneasy.
 5. Set your timezone, NTP server and any other preferences from the other
    tabs.
 
 ### Photo album
 
-Copy `.bmp` (24-bit uncompressed) and/or `.jpg`/`.jpeg` files into a
+Copy `.bmp` (24-bit uncompressed), `.jpg`/`.jpeg`, and/or `.png` files into a
 `photos/` folder at the root of the microSD card (i.e. `/photos/*.bmp`).
 Images are automatically scaled to fill the 480x320 panel; for best quality,
 pre-crop/resize them to 480x320 before copying. BMP is the guaranteed-to-work
-format with zero external dependencies; JPEG goes through the
-`espressif/esp_jpeg` managed component (see notes below).
+format with zero external dependencies; JPEG and PNG go through the
+`espressif/esp_jpeg` and `espressif/libpng` managed components respectively
+(see notes below). PNG transparency is ignored (flattened to opaque) since
+photos fill the whole screen with nothing behind them to show through to.
 
 ## Firmware updates
 
@@ -121,14 +129,14 @@ The **Firmware** tab in the web UI supports two ways to update, both going
 through the same on-device validation:
 
 - **Manual upload** - pick a `.bin` file (built with `idf.py build`,
-  `build/wt32_smalltv.bin`) and click *Upload & install*. A progress bar
+  `build/wt32_firmware.bin`) and click *Upload & install*. A progress bar
   tracks the upload.
 - **Check GitHub releases** - fill in a repo as `owner/name` under
   "Check GitHub releases", save it, then *Check for updates*. It looks at
   `https://api.github.com/repos/<owner>/<name>/releases/latest` for a release
   asset named `firmware.bin` (falling back to the first `.bin` asset) and
   offers to install it if its version tag is newer than the running one. If
-  you maintain a fork, publish your built `build/wt32_smalltv.bin` as
+  you maintain a fork, publish your built `build/wt32_firmware.bin` as
   `firmware.bin` on each GitHub Release and tag it `vX.Y.Z`.
 
 **Validation, so a stray or wrong `.bin` can't brick the device:**
@@ -175,6 +183,26 @@ The partition table (`partitions.csv`) uses the standard `otadata` +
 `ota_0`/`ota_1` dual-app-slot layout (no `factory` partition), so a plain
 `idf.py -p <PORT> flash` still works for the very first flash over serial.
 
+## Troubleshooting the display
+
+All of these are tuned in
+[`components/bsp/bsp_display.c`](components/bsp/bsp_display.c) - each just
+needs a rebuild + reflash to try, no wiring changes:
+
+- **Static/noise, no recognizable image** - almost always i80 bus signal
+  integrity, not a logic bug. Try, in order: (1) lower
+  `BSP_LCD_PIXEL_CLK_HZ` further (e.g. 4 MHz), (2) flip
+  `BSP_LCD_PCLK_ACTIVE_NEG` to `1` (some ST7796 panel batches latch data on
+  the opposite WR edge).
+- **Colors look inverted/wrong but shapes are fine** - flip the `true` in
+  `esp_lcd_panel_invert_color(panel_handle, true)`.
+- **Image is mirrored, rotated, or shifted** - adjust the
+  `esp_lcd_panel_swap_xy()` / `esp_lcd_panel_mirror()` calls right below it.
+- **Backlight comes on but nothing is drawn at all** - check the serial
+  monitor log for an `ESP_ERROR_CHECK` abort during `bsp_display_start()`
+  (touch controller or panel init failing) rather than a display-tuning
+  issue.
+
 ## Project layout
 
 ```
@@ -198,10 +226,12 @@ components/
 - **Analog clock face** - the `clock_face` setting exists in the config
   struct for forward-compatibility, but only the digital face is implemented
   today.
-- **JPEG decoding** is best-effort: `esp_jpeg`'s API has shifted across
-  releases, so if a firmware/component upgrade breaks JPEG decoding, BMP
-  photos will still work unaffected (see
-  `components/app_photo/app_photo_jpeg.c`).
+- **JPEG/PNG decoding** is best-effort: `esp_jpeg` and `libpng`'s APIs can
+  shift across releases, so if a component upgrade breaks one of them, BMP
+  photos keep working unaffected either way (see
+  `components/app_photo/app_photo_jpeg.c` / `app_photo_png.c`). PNG decode
+  also pulls in `espressif/zlib` transitively and is the heaviest of the
+  three formats (RAM and flash-wise) - prefer BMP/JPEG on very large images.
 - **OTA asset naming** - the GitHub update check only looks for an asset
   literally named `firmware.bin` first, else the first `.bin` it finds; if
   your release has multiple boards' binaries, name them so `firmware.bin`
@@ -211,11 +241,18 @@ components/
 
 ## Security note
 
-The fallback SoftAP uses a fixed default password (`smalltv1234`) so the
-device is always configurable out of the box. This is a "same-room trust"
-model, like most similar SmallTV-style gadgets and cheap routers - treat it
-accordingly (it's not intended to resist a determined attacker within Wi-Fi
-range).
+The fallback SoftAP is **open (no password) by default** so the device is
+always configurable out of the box - set a password for it from the
+**System** tab once you've configured the device, if you'd rather it not
+sit open indefinitely. Either way this is a "same-room trust" model, like
+most similar gadgets and cheap routers - it's not intended to resist a
+determined attacker within Wi-Fi range.
+
+The web UI's file manager (see [Photo album](#photo-album)) has no
+authentication either - anyone who can reach the device's IP (its own AP,
+or your home network once joined) can read/write/delete anything under
+`/sdcard`. Keep that in mind before joining the device to a network you
+don't trust everyone on.
 
 ## License
 

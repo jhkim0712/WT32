@@ -30,7 +30,6 @@ static const char *TAG = "app_wifi";
 
 #define WIFI_CONNECTED_BIT BIT0
 
-#define AP_DEFAULT_PASSWORD "smalltv1234"
 #define AP_CHANNEL          1
 #define AP_MAX_CONN         4
 
@@ -70,7 +69,31 @@ static void build_ap_ssid(void)
 {
     uint8_t mac[6];
     esp_wifi_get_mac(WIFI_IF_AP, mac);
-    snprintf(s_ap_ssid, sizeof(s_ap_ssid), "WT32-SmallTV-%02X%02X", mac[4], mac[5]);
+    /* "WT32-" + last 3 octets of the AP MAC address, e.g. "WT32-A1B2C3". */
+    snprintf(s_ap_ssid, sizeof(s_ap_ssid), "WT32-%02X%02X%02X", mac[3], mac[4], mac[5]);
+}
+
+/** Fill in the SoftAP wifi_config_t from app_config's ap_password: an empty
+ *  password (the default) means an open network; a non-empty one switches
+ *  to WPA2-PSK. esp_wifi rejects WPA2 passwords shorter than 8 characters,
+ *  so callers must reject those before getting here (app_web validates the
+ *  web UI's input; app_wifi_start()'s stored-config path can't produce an
+ *  invalid one because app_web already validated it before saving). */
+static void configure_ap(wifi_config_t *ap_config)
+{
+    memset(ap_config, 0, sizeof(*ap_config));
+    ap_config->ap.channel = AP_CHANNEL;
+    ap_config->ap.max_connection = AP_MAX_CONN;
+    strncpy((char *)ap_config->ap.ssid, s_ap_ssid, sizeof(ap_config->ap.ssid));
+    ap_config->ap.ssid_len = strlen(s_ap_ssid);
+
+    app_config_t *app_cfg = app_config_get();
+    if (app_cfg->ap_password[0]) {
+        ap_config->ap.authmode = WIFI_AUTH_WPA2_PSK;
+        strncpy((char *)ap_config->ap.password, app_cfg->ap_password, sizeof(ap_config->ap.password) - 1);
+    } else {
+        ap_config->ap.authmode = WIFI_AUTH_OPEN;
+    }
 }
 
 esp_err_t app_wifi_start(void)
@@ -99,16 +122,8 @@ esp_err_t app_wifi_start(void)
     app_config_t *app_cfg = app_config_get();
     s_have_creds = (app_cfg->wifi_ssid[0] != '\0');
 
-    wifi_config_t ap_config = {
-        .ap = {
-            .channel = AP_CHANNEL,
-            .max_connection = AP_MAX_CONN,
-            .authmode = WIFI_AUTH_WPA2_PSK,
-        },
-    };
-    strncpy((char *)ap_config.ap.ssid, s_ap_ssid, sizeof(ap_config.ap.ssid));
-    ap_config.ap.ssid_len = strlen(s_ap_ssid);
-    strncpy((char *)ap_config.ap.password, AP_DEFAULT_PASSWORD, sizeof(ap_config.ap.password));
+    wifi_config_t ap_config;
+    configure_ap(&ap_config);
 
     ESP_ERROR_CHECK(esp_wifi_set_mode(WIFI_MODE_APSTA));
     ESP_ERROR_CHECK(esp_wifi_set_config(WIFI_IF_AP, &ap_config));
@@ -127,8 +142,8 @@ esp_err_t app_wifi_start(void)
     }
 
     if (mdns_init() == ESP_OK) {
-        mdns_hostname_set(app_cfg->hostname[0] ? app_cfg->hostname : "wt32-smalltv");
-        mdns_instance_name_set("WT32 SmallTV");
+        mdns_hostname_set(app_cfg->hostname[0] ? app_cfg->hostname : "wt32");
+        mdns_instance_name_set("WT32");
         mdns_service_add(NULL, "_http", "_tcp", 80, NULL, 0);
     } else {
         ESP_LOGW(TAG, "mdns_init failed - the device will only be reachable by IP address");
@@ -140,8 +155,9 @@ esp_err_t app_wifi_start(void)
     esp_netif_get_ip_info(s_ap_netif, &ap_ip);
     dns_server_start(ap_ip.ip.addr);
 
-    ESP_LOGI(TAG, "SoftAP \"%s\" (password: %s) always available at " IPSTR,
-             s_ap_ssid, AP_DEFAULT_PASSWORD, IP2STR(&ap_ip.ip));
+    ESP_LOGI(TAG, "SoftAP \"%s\" (%s) always available at " IPSTR,
+             s_ap_ssid, ap_config.ap.authmode == WIFI_AUTH_OPEN ? "open, no password" : "password-protected",
+             IP2STR(&ap_ip.ip));
 
     if (s_have_creds) {
         ESP_LOGI(TAG, "Attempting to join \"%s\"...", app_cfg->wifi_ssid);
@@ -183,6 +199,23 @@ void app_wifi_get_ap_ssid(char *buf, size_t buf_len)
 {
     strncpy(buf, s_ap_ssid, buf_len - 1);
     buf[buf_len - 1] = '\0';
+}
+
+esp_err_t app_wifi_set_ap_password(const char *password)
+{
+    if (password && password[0] && strlen(password) < 8) {
+        /* esp_wifi rejects this outright for WPA2-PSK; fail early with a
+         * clearer error than whatever esp_wifi_set_config() would return. */
+        return ESP_ERR_INVALID_ARG;
+    }
+
+    app_config_t *app_cfg = app_config_get();
+    strncpy(app_cfg->ap_password, password ? password : "", sizeof(app_cfg->ap_password) - 1);
+    app_cfg->ap_password[sizeof(app_cfg->ap_password) - 1] = '\0';
+
+    wifi_config_t ap_config;
+    configure_ap(&ap_config);
+    return esp_wifi_set_config(WIFI_IF_AP, &ap_config);
 }
 
 size_t app_wifi_scan(app_wifi_ap_info_t *out, size_t max_entries)

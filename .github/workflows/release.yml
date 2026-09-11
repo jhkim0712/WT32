@@ -44,7 +44,7 @@ jobs:
           mkdir -p release
           # "firmware.bin" is the exact name components/app_ota looks for
           # when checking GitHub releases for an update.
-          cp build/wt32_smalltv.bin release/firmware.bin
+          cp build/wt32_firmware.bin release/firmware.bin
           cp build/bootloader/bootloader.bin release/bootloader.bin
           cp build/partition_table/partition-table.bin release/partition-table.bin
           cp build/ota_data_initial.bin release/ota_data_initial.bin

@@ -39,7 +39,8 @@ bool app_wifi_is_connected(void);
 /** Copy the current IPv4 address (STA or AP) as a dotted string into buf. */
 esp_err_t app_wifi_get_ip_str(char *buf, size_t buf_len);
 
-/** Copy the SoftAP SSID (e.g. "WT32-SmallTV-AB12") into buf. Valid in any mode. */
+/** Copy the SoftAP SSID (e.g. "WT32-A1B2C3", the last 3 octets of its MAC
+ *  address) into buf. Valid in any mode. */
 void app_wifi_get_ap_ssid(char *buf, size_t buf_len);
 
 /** Blocking scan for nearby access points. @return number of entries written to out. */
@@ -55,6 +56,18 @@ esp_err_t app_wifi_connect_sta(const char *ssid, const char *password, uint32_t 
 
 /** @return current RSSI in dBm, or 0 if not connected. */
 int8_t app_wifi_get_rssi(void);
+
+/**
+ * @brief Change the fallback SoftAP's password and apply it immediately.
+ *
+ * @param password NULL or "" for an open network (the default); otherwise
+ *                 a WPA2-PSK password, which esp_wifi requires to be at
+ *                 least 8 characters (returns ESP_ERR_INVALID_ARG if not).
+ *
+ * On ESP_OK the caller is responsible for persisting app_config (this
+ * function only updates the in-RAM copy and the running Wi-Fi config).
+ */
+esp_err_t app_wifi_set_ap_password(const char *password);
 
 #ifdef __cplusplus
 }

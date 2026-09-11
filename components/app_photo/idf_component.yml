@@ -1,3 +1,6 @@
 dependencies:
   idf: ">=6.0"
   espressif/esp_jpeg: "^1.0.0"
+  # PNG support (app_photo_png.c). Pulls in espressif/zlib transitively -
+  # no need to list it here separately, our own code only calls libpng.
+  espressif/libpng: "^1.6.58~1"

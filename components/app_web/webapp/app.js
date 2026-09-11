@@ -54,6 +54,7 @@
       $("stTime").textContent = st.time_synced ? st.time : (st.time + " (not synced)");
       $("stUptime").textContent = formatUptime(st.uptime_s);
       $("stHeap").textContent = Math.round(st.heap_free / 1024) + " KB";
+      $("apSsidHint").textContent = st.ap_ssid;
     } catch (e) {
       $("statusDot").classList.remove("online");
     }
@@ -177,6 +178,26 @@
     if (!confirm("This erases all saved settings (Wi-Fi included). Continue?")) return;
     await api("/api/system/factory_reset", "POST");
     alert("Factory reset - the device will restart in setup mode.");
+  });
+
+  $("btnSaveApPassword").addEventListener("click", async function () {
+    const msg = $("apPasswordMsg");
+    const pw = $("apPassword").value;
+    if (pw && pw.length < 8) {
+      showMsg(msg, "Password must be at least 8 characters (or leave blank for open)", false);
+      return;
+    }
+    try {
+      const res = await api("/api/system/ap_password", "POST", { password: pw });
+      if (res.ok) {
+        showMsg(msg, pw ? "AP password set" : "AP is now open (no password)", true);
+        $("apPassword").value = "";
+      } else {
+        showMsg(msg, "Failed: " + (res.error || ""), false);
+      }
+    } catch (e) {
+      showMsg(msg, "Request failed", false);
+    }
   });
 
   /* ---- Firmware / OTA ---- */
@@ -322,6 +343,185 @@
     });
 
     xhr.send(file);
+  });
+
+  /* ---- Files ---- */
+  let filesCurrentPath = "/";
+
+  function joinPath(dir, name) {
+    return dir === "/" ? "/" + name : dir + "/" + name;
+  }
+
+  function formatSize(bytes) {
+    if (bytes < 1024) return bytes + " B";
+    if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + " KB";
+    return (bytes / (1024 * 1024)).toFixed(1) + " MB";
+  }
+
+  function renderBreadcrumb(path) {
+    const wrap = $("filesBreadcrumb");
+    wrap.innerHTML = "";
+    const parts = path.split("/").filter(Boolean);
+    let acc = "";
+
+    const rootBtn = document.createElement("button");
+    rootBtn.className = "crumb";
+    rootBtn.textContent = "/ (SD card root)";
+    rootBtn.addEventListener("click", function () { loadFiles("/"); });
+    wrap.appendChild(rootBtn);
+
+    parts.forEach(function (part) {
+      acc += "/" + part;
+      const b = document.createElement("button");
+      b.className = "crumb";
+      b.textContent = part;
+      const target = acc;
+      b.addEventListener("click", function () { loadFiles(target); });
+      wrap.appendChild(b);
+    });
+  }
+
+  async function loadFiles(path) {
+    filesCurrentPath = path;
+    renderBreadcrumb(path);
+    const tbody = $("filesList");
+    tbody.innerHTML = "<tr><td>Loading...</td></tr>";
+    try {
+      const data = await api("/api/files/list?path=" + encodeURIComponent(path));
+      tbody.innerHTML = "";
+      const entries = (data.entries || []).slice().sort(function (a, b) {
+        if (a.is_dir !== b.is_dir) return a.is_dir ? -1 : 1;
+        return a.name.localeCompare(b.name);
+      });
+      $("filesEmptyHint").hidden = entries.length > 0;
+      entries.forEach(function (entry) { tbody.appendChild(renderFileRow(entry)); });
+    } catch (e) {
+      tbody.innerHTML = "<tr><td>Failed to load (is the SD card mounted?)</td></tr>";
+    }
+  }
+
+  function renderFileRow(entry) {
+    const tr = document.createElement("tr");
+    const fullPath = joinPath(filesCurrentPath, entry.name);
+
+    const nameTd = document.createElement("td");
+    const nameSpan = document.createElement("span");
+    nameSpan.className = "f-name" + (entry.is_dir ? " is-dir" : "");
+    nameSpan.textContent = (entry.is_dir ? "📁 " : "📄 ") + entry.name;
+    if (entry.is_dir) {
+      nameSpan.addEventListener("click", function () { loadFiles(fullPath); });
+    } else {
+      nameSpan.addEventListener("click", function () {
+        window.open("/api/files/download?path=" + encodeURIComponent(fullPath), "_blank");
+      });
+    }
+    nameTd.appendChild(nameSpan);
+    tr.appendChild(nameTd);
+
+    const sizeTd = document.createElement("td");
+    sizeTd.className = "f-size";
+    sizeTd.textContent = entry.is_dir ? "" : formatSize(entry.size);
+    tr.appendChild(sizeTd);
+
+    const actionsTd = document.createElement("td");
+    actionsTd.className = "f-actions";
+
+    const renameBtn = document.createElement("button");
+    renameBtn.title = "Rename";
+    renameBtn.textContent = "✏️";
+    renameBtn.addEventListener("click", async function () {
+      const newName = prompt("Rename \"" + entry.name + "\" to:", entry.name);
+      if (!newName || newName === entry.name) return;
+      try {
+        const res = await api("/api/files/rename", "POST", { from: fullPath, to: joinPath(filesCurrentPath, newName) });
+        if (res.ok) { loadFiles(filesCurrentPath); } else { showMsg($("filesMsg"), "Rename failed: " + (res.error || ""), false); }
+      } catch (e) { showMsg($("filesMsg"), "Rename failed", false); }
+    });
+    actionsTd.appendChild(renameBtn);
+
+    const deleteBtn = document.createElement("button");
+    deleteBtn.className = "danger";
+    deleteBtn.title = "Delete";
+    deleteBtn.textContent = "🗑️";
+    deleteBtn.addEventListener("click", async function () {
+      if (!confirm("Delete \"" + entry.name + "\"? This can't be undone.")) return;
+      try {
+        const res = await api("/api/files/delete", "POST", { path: fullPath });
+        if (res.ok) { loadFiles(filesCurrentPath); } else { showMsg($("filesMsg"), "Delete failed: " + (res.error || ""), false); }
+      } catch (e) { showMsg($("filesMsg"), "Delete failed", false); }
+    });
+    actionsTd.appendChild(deleteBtn);
+
+    tr.appendChild(actionsTd);
+    return tr;
+  }
+
+  $("btnFilesUpload").addEventListener("click", function () {
+    const input = $("filesUploadInput");
+    const msg = $("filesMsg");
+    if (!input.files || input.files.length === 0) {
+      showMsg(msg, "Choose a file first", false);
+      return;
+    }
+    const file = input.files[0];
+    const url = "/api/files/upload?path=" + encodeURIComponent(filesCurrentPath) +
+                "&name=" + encodeURIComponent(file.name);
+
+    const xhr = new XMLHttpRequest();
+    xhr.open("POST", url);
+    $("filesUploadProgressWrap").hidden = false;
+    $("filesUploadProgressBar").style.width = "0%";
+
+    xhr.upload.addEventListener("progress", function (e) {
+      if (e.lengthComputable) {
+        $("filesUploadProgressBar").style.width = Math.round((e.loaded / e.total) * 100) + "%";
+      }
+    });
+
+    xhr.addEventListener("load", function () {
+      $("filesUploadProgressWrap").hidden = true;
+      let data = {};
+      try { data = JSON.parse(xhr.responseText); } catch (e) { /* ignore */ }
+      if (xhr.status === 200 && data.ok) {
+        showMsg(msg, "Uploaded " + file.name, true);
+        input.value = "";
+        loadFiles(filesCurrentPath);
+      } else {
+        showMsg(msg, "Upload failed: " + (data.error || xhr.status), false);
+      }
+    });
+
+    xhr.addEventListener("error", function () {
+      $("filesUploadProgressWrap").hidden = true;
+      showMsg(msg, "Upload failed (connection error)", false);
+    });
+
+    xhr.send(file);
+  });
+
+  $("btnFilesMkdir").addEventListener("click", async function () {
+    const nameInput = $("filesNewFolderName");
+    const msg = $("filesMsg");
+    const name = nameInput.value.trim();
+    if (!name || name.indexOf("/") !== -1) {
+      showMsg(msg, "Enter a valid folder name", false);
+      return;
+    }
+    try {
+      const res = await api("/api/files/mkdir", "POST", { path: joinPath(filesCurrentPath, name) });
+      if (res.ok) {
+        nameInput.value = "";
+        loadFiles(filesCurrentPath);
+      } else {
+        showMsg(msg, "Could not create folder: " + (res.error || ""), false);
+      }
+    } catch (e) {
+      showMsg(msg, "Could not create folder", false);
+    }
+  });
+
+  document.querySelector('.tab[data-tab="files"]').addEventListener("click", function () {
+    loadFiles(filesCurrentPath);
   });
 
   /* ---- Boot ---- */

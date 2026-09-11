@@ -31,7 +31,8 @@ static bool has_extension(const char *name, const char *ext)
 
 static bool is_supported_image(const char *name)
 {
-    return has_extension(name, ".bmp") || has_extension(name, ".jpg") || has_extension(name, ".jpeg");
+    return has_extension(name, ".bmp") || has_extension(name, ".jpg") || has_extension(name, ".jpeg") ||
+           has_extension(name, ".png");
 }
 
 esp_err_t app_photo_scan(const char *dir_path)
@@ -125,6 +126,8 @@ esp_err_t app_photo_decode_to_canvas(size_t index, uint16_t canvas_w, uint16_t c
 
     if (has_extension(path, ".bmp")) {
         ret = app_photo_bmp_decode_native(path, &native, &native_w, &native_h);
+    } else if (has_extension(path, ".png")) {
+        ret = app_photo_png_decode_native(path, &native, &native_w, &native_h);
     } else {
         ret = app_photo_jpeg_decode_native(path, &native, &native_w, &native_h);
     }

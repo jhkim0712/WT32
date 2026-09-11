@@ -13,5 +13,6 @@ idf_component_register(
         app_time
         app_photo
         app_ota
+        app_files
         bsp
 )

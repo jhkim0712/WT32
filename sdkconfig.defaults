@@ -1,4 +1,4 @@
-# WT32-SC01 Plus "SmallTV" firmware - default sdkconfig
+# WT32-SC01 Plus firmware - default sdkconfig
 # These defaults are applied on a clean `idf.py set-target esp32s3` / first build.
 # Run `idf.py menuconfig` to review/tune after the first build.
 

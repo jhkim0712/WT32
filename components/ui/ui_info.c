@@ -5,6 +5,7 @@
 #include "ui_internal.h"
 #include "app_wifi.h"
 #include "app_ota.h"
+#include "app_config.h"
 #include "bsp/bsp_board.h"
 
 static lv_obj_t *s_label;
@@ -32,7 +33,7 @@ static void update_cb(lv_timer_t *t)
 #pragma GCC diagnostic ignored "-Wformat-truncation"
     if (app_wifi_get_mode() == APP_WIFI_MODE_STA) {
         snprintf(buf, sizeof(buf),
-                 "WT32 SmallTV  -  fw %s\n\n"
+                 "WT32  -  fw %s\n\n"
                  "Wi-Fi: connected (%d dBm)\n"
                  "IP address: %s\n"
                  "Configure at http://%s/\n\n"
@@ -40,14 +41,21 @@ static void update_cb(lv_timer_t *t)
                  "Uptime: %" PRId64 "s   Free heap: %" PRIu32 " KB",
                  fw_version, app_wifi_get_rssi(), ip, ip, sd_status, uptime_s, heap_kb);
     } else {
+        const char *ap_pw = app_config_get()->ap_password;
+        char pw_line[80]; /* fits the full APP_CFG_PASS_MAX_LEN password plus the surrounding text */
+        if (ap_pw[0]) {
+            snprintf(pw_line, sizeof(pw_line), "(password: %s)", ap_pw);
+        } else {
+            snprintf(pw_line, sizeof(pw_line), "(open network, no password)");
+        }
         snprintf(buf, sizeof(buf),
-                 "WT32 SmallTV  -  fw %s\n\n"
+                 "WT32  -  fw %s\n\n"
                  "Wi-Fi not set up yet.\n"
-                 "Connect to \"%s\"\n(password: smalltv1234)\n"
+                 "Connect to \"%s\"\n%s\n"
                  "then open http://%s/\n\n"
                  "SD card: %s\n"
                  "Uptime: %" PRId64 "s   Free heap: %" PRIu32 " KB",
-                 fw_version, ap_ssid, ip, sd_status, uptime_s, heap_kb);
+                 fw_version, ap_ssid, pw_line, ip, sd_status, uptime_s, heap_kb);
     }
 #pragma GCC diagnostic pop
     lv_label_set_text(s_label, buf);

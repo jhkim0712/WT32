@@ -9,4 +9,4 @@ include($ENV{IDF_PATH}/tools/cmake/project.cmake)
 # and is what components/app_ota checks before installing an update (see
 # FIRMWARE_PROJECT_NAME in components/app_ota/app_ota.c) - don't rename it
 # without updating that constant too.
-project(wt32_smalltv)
+project(wt32_firmware)

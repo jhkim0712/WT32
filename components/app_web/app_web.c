@@ -6,6 +6,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <stdbool.h>
+#include <ctype.h>
 #include <time.h>
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
@@ -21,6 +22,7 @@
 #include "app_time.h"
 #include "app_photo.h"
 #include "app_ota.h"
+#include "app_files.h"
 #include "bsp/bsp_board.h"
 
 static const char *TAG = "app_web";
@@ -81,10 +83,44 @@ static esp_err_t send_ok(httpd_req_t *req)
     return httpd_resp_sendstr(req, "{\"ok\":true}");
 }
 
+static esp_err_t send_json_error(httpd_req_t *req, const char *status, const char *error)
+{
+    httpd_resp_set_status(req, status);
+    httpd_resp_set_type(req, "application/json");
+    char buf[192];
+    /* "error" is always one of this file's own short literal error codes -
+     * GCC can't see that from a `const char *` parameter, so silence the
+     * truncation warning instead of restructuring around it. */
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wformat-truncation"
+    snprintf(buf, sizeof(buf), "{\"ok\":false,\"error\":\"%s\"}", error);
+#pragma GCC diagnostic pop
+    return httpd_resp_sendstr(req, buf);
+}
+
 static void delayed_restart_task(void *arg)
 {
     vTaskDelay(pdMS_TO_TICKS(500));
     esp_restart();
+}
+
+/** In-place percent-decode (the frontend always calls encodeURIComponent() on
+ *  path/name values before putting them in a query string - this undoes
+ *  that so filenames with spaces, parentheses, non-ASCII characters, etc.
+ *  work). Leaves anything that isn't a valid "%XX" escape untouched. */
+static void url_decode(char *s)
+{
+    char *w = s;
+    for (char *r = s; *r; r++) {
+        if (r[0] == '%' && isxdigit((unsigned char)r[1]) && isxdigit((unsigned char)r[2])) {
+            char hex[3] = {r[1], r[2], '\0'};
+            *w++ = (char)strtol(hex, NULL, 16);
+            r += 2;
+        } else {
+            *w++ = *r;
+        }
+    }
+    *w = '\0';
 }
 
 /* ---------------------------------------------------------------------- */
@@ -336,24 +372,40 @@ static esp_err_t factory_reset_post_handler(httpd_req_t *req)
     return ret;
 }
 
+/* Body: {"password": "..."} - "" (or omitted) means "no password" (open). */
+static esp_err_t ap_password_post_handler(httpd_req_t *req)
+{
+    char *body = read_body(req);
+    if (!body) {
+        httpd_resp_send_err(req, HTTPD_400_BAD_REQUEST, "missing/oversized body");
+        return ESP_FAIL;
+    }
+    cJSON *root = cJSON_Parse(body);
+    free(body);
+    if (!root) {
+        httpd_resp_send_err(req, HTTPD_400_BAD_REQUEST, "invalid JSON");
+        return ESP_FAIL;
+    }
+
+    cJSON *pw_item = cJSON_GetObjectItem(root, "password");
+    const char *password = cJSON_IsString(pw_item) ? pw_item->valuestring : "";
+
+    esp_err_t ret = app_wifi_set_ap_password(password);
+    cJSON_Delete(root);
+
+    if (ret == ESP_ERR_INVALID_ARG) {
+        return send_json_error(req, "400 Bad Request", "password_too_short");
+    }
+    if (ret != ESP_OK) {
+        return send_json_error(req, "500 Internal Server Error", "could_not_apply");
+    }
+    app_config_save();
+    return send_ok(req);
+}
+
 /* ---------------------------------------------------------------------- */
 /* /api/ota/... routes - firmware updates                                 */
 /* ---------------------------------------------------------------------- */
-
-static esp_err_t send_json_error(httpd_req_t *req, const char *status, const char *error)
-{
-    httpd_resp_set_status(req, status);
-    httpd_resp_set_type(req, "application/json");
-    char buf[192];
-    /* "error" is always one of this file's own short literal error codes -
-     * GCC can't see that from a `const char *` parameter, so silence the
-     * truncation warning instead of restructuring around it. */
-#pragma GCC diagnostic push
-#pragma GCC diagnostic ignored "-Wformat-truncation"
-    snprintf(buf, sizeof(buf), "{\"ok\":false,\"error\":\"%s\"}", error);
-#pragma GCC diagnostic pop
-    return httpd_resp_sendstr(req, buf);
-}
 
 static esp_err_t ota_status_get_handler(httpd_req_t *req)
 {
@@ -471,7 +523,7 @@ static esp_err_t ota_upload_post_handler(httpd_req_t *req)
         }
         esp_err_t wret = app_ota_upload_write(buf, r);
         if (wret != ESP_OK) {
-            fail_reason = (wret == ESP_ERR_INVALID_ARG) ? "not_a_wt32_smalltv_image" : "flash_write_failed";
+            fail_reason = (wret == ESP_ERR_INVALID_ARG) ? "not_a_wt32_image" : "flash_write_failed";
             break;
         }
         remaining -= r;
@@ -494,6 +546,257 @@ static esp_err_t ota_upload_post_handler(httpd_req_t *req)
 }
 
 /* ---------------------------------------------------------------------- */
+/* /api/files/... routes - SD card file manager                          */
+/* ---------------------------------------------------------------------- */
+
+#define FILES_IO_CHUNK 2048
+
+static const char *guess_content_type(const char *name)
+{
+    size_t len = strlen(name);
+    if (len > 4 && strcasecmp(name + len - 4, ".jpg") == 0) return "image/jpeg";
+    if (len > 5 && strcasecmp(name + len - 5, ".jpeg") == 0) return "image/jpeg";
+    if (len > 4 && strcasecmp(name + len - 4, ".png") == 0) return "image/png";
+    if (len > 4 && strcasecmp(name + len - 4, ".bmp") == 0) return "image/bmp";
+    if (len > 4 && strcasecmp(name + len - 4, ".gif") == 0) return "image/gif";
+    if (len > 4 && strcasecmp(name + len - 4, ".txt") == 0) return "text/plain";
+    if (len > 5 && strcasecmp(name + len - 5, ".json") == 0) return "application/json";
+    return "application/octet-stream";
+}
+
+static esp_err_t files_list_get_handler(httpd_req_t *req)
+{
+    char path[APP_FILES_PATH_MAX] = "/";
+    char query[512];
+    if (httpd_req_get_url_query_str(req, query, sizeof(query)) == ESP_OK) {
+        char tmp[APP_FILES_PATH_MAX];
+        if (httpd_query_key_value(query, "path", tmp, sizeof(tmp)) == ESP_OK) {
+            url_decode(tmp);
+            strncpy(path, tmp, sizeof(path) - 1);
+            path[sizeof(path) - 1] = '\0';
+        }
+    }
+
+    static app_files_entry_t entries[128];
+    size_t count = 0;
+    if (app_files_list(path, entries, sizeof(entries) / sizeof(entries[0]), &count) != ESP_OK) {
+        return send_json_error(req, "404 Not Found", "list_failed");
+    }
+
+    cJSON *root = cJSON_CreateObject();
+    cJSON_AddStringToObject(root, "path", path);
+    cJSON *arr = cJSON_AddArrayToObject(root, "entries");
+    for (size_t i = 0; i < count; i++) {
+        cJSON *o = cJSON_CreateObject();
+        cJSON_AddStringToObject(o, "name", entries[i].name);
+        cJSON_AddBoolToObject(o, "is_dir", entries[i].is_dir);
+        cJSON_AddNumberToObject(o, "size", (double)entries[i].size);
+        cJSON_AddItemToArray(arr, o);
+    }
+    return send_json(req, root);
+}
+
+static esp_err_t files_download_get_handler(httpd_req_t *req)
+{
+    char query[512];
+    char path[APP_FILES_PATH_MAX];
+    if (httpd_req_get_url_query_str(req, query, sizeof(query)) != ESP_OK ||
+        httpd_query_key_value(query, "path", path, sizeof(path)) != ESP_OK) {
+        return send_json_error(req, "400 Bad Request", "missing_path");
+    }
+    url_decode(path);
+
+    char abs_path[APP_FILES_PATH_MAX];
+    if (!app_files_resolve(path, abs_path, sizeof(abs_path))) {
+        return send_json_error(req, "400 Bad Request", "invalid_path");
+    }
+
+    FILE *f = fopen(abs_path, "rb");
+    if (!f) {
+        return send_json_error(req, "404 Not Found", "not_found");
+    }
+    httpd_resp_set_type(req, guess_content_type(path));
+
+    uint8_t *buf = malloc(FILES_IO_CHUNK);
+    if (!buf) {
+        fclose(f);
+        return send_json_error(req, "500 Internal Server Error", "out_of_memory");
+    }
+
+    esp_err_t ret = ESP_OK;
+    size_t r;
+    while ((r = fread(buf, 1, FILES_IO_CHUNK, f)) > 0) {
+        if (httpd_resp_send_chunk(req, (const char *)buf, r) != ESP_OK) {
+            ret = ESP_FAIL;
+            break;
+        }
+    }
+    free(buf);
+    fclose(f);
+    if (ret == ESP_OK) {
+        httpd_resp_send_chunk(req, NULL, 0); /* terminate the chunked response */
+    }
+    return ret;
+}
+
+/* Raw file body (any content-type) - target directory ("path") and
+ * filename ("name", no "/" allowed) come from the query string. */
+static esp_err_t files_upload_post_handler(httpd_req_t *req)
+{
+    char dir_path[APP_FILES_PATH_MAX] = "/";
+    char name[APP_FILES_NAME_MAX] = {0};
+    char query[512];
+    if (httpd_req_get_url_query_str(req, query, sizeof(query)) == ESP_OK) {
+        char tmp[APP_FILES_PATH_MAX];
+        if (httpd_query_key_value(query, "path", tmp, sizeof(tmp)) == ESP_OK) {
+            url_decode(tmp);
+            strncpy(dir_path, tmp, sizeof(dir_path) - 1);
+            dir_path[sizeof(dir_path) - 1] = '\0';
+        }
+        if (httpd_query_key_value(query, "name", name, sizeof(name)) == ESP_OK) {
+            url_decode(name);
+        }
+    }
+
+    if (name[0] == '\0' || strchr(name, '/') != NULL) {
+        return send_json_error(req, "400 Bad Request", "invalid_name");
+    }
+    if (req->content_len <= 0) {
+        return send_json_error(req, "400 Bad Request", "empty_body");
+    }
+
+    /* dir_path (APP_FILES_PATH_MAX) + "/" + name (APP_FILES_NAME_MAX) really
+     * can exceed sizeof(rel_path) in the worst case - that's fine, it's
+     * checked (and rejected) right below via the returned length, not
+     * relied upon to always fit. */
+    char rel_path[APP_FILES_PATH_MAX];
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wformat-truncation"
+    int n = snprintf(rel_path, sizeof(rel_path), "%s/%s", dir_path, name);
+#pragma GCC diagnostic pop
+    if (n < 0 || (size_t)n >= sizeof(rel_path)) {
+        return send_json_error(req, "400 Bad Request", "path_too_long");
+    }
+
+    char abs_path[APP_FILES_PATH_MAX];
+    if (!app_files_resolve(rel_path, abs_path, sizeof(abs_path))) {
+        return send_json_error(req, "400 Bad Request", "invalid_path");
+    }
+
+    FILE *f = fopen(abs_path, "wb");
+    if (!f) {
+        return send_json_error(req, "500 Internal Server Error", "could_not_create_file");
+    }
+
+    uint8_t *buf = malloc(FILES_IO_CHUNK);
+    if (!buf) {
+        fclose(f);
+        remove(abs_path);
+        return send_json_error(req, "500 Internal Server Error", "out_of_memory");
+    }
+
+    int remaining = req->content_len;
+    bool failed = false;
+    while (remaining > 0) {
+        int to_read = remaining < FILES_IO_CHUNK ? remaining : FILES_IO_CHUNK;
+        int r = httpd_req_recv(req, (char *)buf, to_read);
+        if (r <= 0 || fwrite(buf, 1, r, f) != (size_t)r) {
+            failed = true;
+            break;
+        }
+        remaining -= r;
+    }
+    free(buf);
+    fclose(f);
+
+    if (failed) {
+        remove(abs_path);
+        return send_json_error(req, "400 Bad Request", "upload_failed");
+    }
+
+    ESP_LOGI(TAG, "Uploaded %s (%d bytes)", abs_path, (int)req->content_len);
+    return send_ok(req);
+}
+
+static esp_err_t files_delete_post_handler(httpd_req_t *req)
+{
+    char *body = read_body(req);
+    if (!body) {
+        httpd_resp_send_err(req, HTTPD_400_BAD_REQUEST, "missing/oversized body");
+        return ESP_FAIL;
+    }
+    cJSON *root = cJSON_Parse(body);
+    free(body);
+    cJSON *path_item = root ? cJSON_GetObjectItem(root, "path") : NULL;
+    if (!cJSON_IsString(path_item)) {
+        cJSON_Delete(root);
+        return send_json_error(req, "400 Bad Request", "missing_path");
+    }
+    char path[APP_FILES_PATH_MAX];
+    strncpy(path, path_item->valuestring, sizeof(path) - 1);
+    path[sizeof(path) - 1] = '\0';
+    cJSON_Delete(root);
+
+    if (app_files_delete(path) != ESP_OK) {
+        return send_json_error(req, "400 Bad Request", "delete_failed");
+    }
+    return send_ok(req);
+}
+
+static esp_err_t files_rename_post_handler(httpd_req_t *req)
+{
+    char *body = read_body(req);
+    if (!body) {
+        httpd_resp_send_err(req, HTTPD_400_BAD_REQUEST, "missing/oversized body");
+        return ESP_FAIL;
+    }
+    cJSON *root = cJSON_Parse(body);
+    free(body);
+    cJSON *from_item = root ? cJSON_GetObjectItem(root, "from") : NULL;
+    cJSON *to_item = root ? cJSON_GetObjectItem(root, "to") : NULL;
+    if (!cJSON_IsString(from_item) || !cJSON_IsString(to_item)) {
+        cJSON_Delete(root);
+        return send_json_error(req, "400 Bad Request", "missing_from_or_to");
+    }
+    char from[APP_FILES_PATH_MAX], to[APP_FILES_PATH_MAX];
+    strncpy(from, from_item->valuestring, sizeof(from) - 1);
+    from[sizeof(from) - 1] = '\0';
+    strncpy(to, to_item->valuestring, sizeof(to) - 1);
+    to[sizeof(to) - 1] = '\0';
+    cJSON_Delete(root);
+
+    if (app_files_rename(from, to) != ESP_OK) {
+        return send_json_error(req, "400 Bad Request", "rename_failed");
+    }
+    return send_ok(req);
+}
+
+static esp_err_t files_mkdir_post_handler(httpd_req_t *req)
+{
+    char *body = read_body(req);
+    if (!body) {
+        httpd_resp_send_err(req, HTTPD_400_BAD_REQUEST, "missing/oversized body");
+        return ESP_FAIL;
+    }
+    cJSON *root = cJSON_Parse(body);
+    free(body);
+    cJSON *path_item = root ? cJSON_GetObjectItem(root, "path") : NULL;
+    if (!cJSON_IsString(path_item)) {
+        cJSON_Delete(root);
+        return send_json_error(req, "400 Bad Request", "missing_path");
+    }
+    char path[APP_FILES_PATH_MAX];
+    strncpy(path, path_item->valuestring, sizeof(path) - 1);
+    path[sizeof(path) - 1] = '\0';
+    cJSON_Delete(root);
+
+    if (app_files_mkdir(path) != ESP_OK) {
+        return send_json_error(req, "400 Bad Request", "mkdir_failed");
+    }
+    return send_ok(req);
+}
+
+/* ---------------------------------------------------------------------- */
 /* Captive portal: redirect anything unrecognized back to "/"              */
 /* ---------------------------------------------------------------------- */
 
@@ -510,7 +813,7 @@ static esp_err_t captive_redirect_handler(httpd_req_t *req, httpd_err_code_t err
 esp_err_t app_web_start(void)
 {
     httpd_config_t config = HTTPD_DEFAULT_CONFIG();
-    config.max_uri_handlers = 20;
+    config.max_uri_handlers = 24;
     config.lru_purge_enable = true;
     config.uri_match_fn = httpd_uri_match_wildcard;
     config.stack_size = 8192; /* OTA writes + JSON parsing want a bit more than the 4KB default */
@@ -533,10 +836,17 @@ esp_err_t app_web_start(void)
         {.uri = "/api/wifi/connect",          .method = HTTP_POST, .handler = wifi_connect_post_handler},
         {.uri = "/api/system/restart",        .method = HTTP_POST, .handler = restart_post_handler},
         {.uri = "/api/system/factory_reset",  .method = HTTP_POST, .handler = factory_reset_post_handler},
+        {.uri = "/api/system/ap_password",    .method = HTTP_POST, .handler = ap_password_post_handler},
         {.uri = "/api/ota/status",            .method = HTTP_GET,  .handler = ota_status_get_handler},
         {.uri = "/api/ota/check",             .method = HTTP_GET,  .handler = ota_check_get_handler},
         {.uri = "/api/ota/install",           .method = HTTP_POST, .handler = ota_install_post_handler},
         {.uri = "/api/ota/upload",            .method = HTTP_POST, .handler = ota_upload_post_handler},
+        {.uri = "/api/files/list",            .method = HTTP_GET,  .handler = files_list_get_handler},
+        {.uri = "/api/files/download",        .method = HTTP_GET,  .handler = files_download_get_handler},
+        {.uri = "/api/files/upload",          .method = HTTP_POST, .handler = files_upload_post_handler},
+        {.uri = "/api/files/delete",          .method = HTTP_POST, .handler = files_delete_post_handler},
+        {.uri = "/api/files/rename",          .method = HTTP_POST, .handler = files_rename_post_handler},
+        {.uri = "/api/files/mkdir",           .method = HTTP_POST, .handler = files_mkdir_post_handler},
     };
     for (size_t i = 0; i < sizeof(routes) / sizeof(routes[0]); i++) {
         httpd_register_uri_handler(server, &routes[i]);

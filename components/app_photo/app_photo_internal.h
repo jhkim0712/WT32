@@ -14,6 +14,7 @@
 
 esp_err_t app_photo_bmp_decode_native(const char *path, uint16_t **out_buf, uint16_t *out_w, uint16_t *out_h);
 esp_err_t app_photo_jpeg_decode_native(const char *path, uint16_t **out_buf, uint16_t *out_w, uint16_t *out_h);
+esp_err_t app_photo_png_decode_native(const char *path, uint16_t **out_buf, uint16_t *out_w, uint16_t *out_h);
 
 /** Nearest-neighbor resize src (src_w x src_h) into a freshly malloc'd
  *  dst_w x dst_h RGB565 buffer. Returns NULL on allocation failure. */

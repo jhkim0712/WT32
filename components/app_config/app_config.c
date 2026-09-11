@@ -18,7 +18,8 @@ void app_config_reset_defaults(app_config_t *cfg)
 
     cfg->wifi_ssid[0] = '\0';
     cfg->wifi_password[0] = '\0';
-    strncpy(cfg->hostname, "wt32-smalltv", sizeof(cfg->hostname) - 1);
+    cfg->ap_password[0] = '\0'; /* open SoftAP by default - see app_config.h */
+    strncpy(cfg->hostname, "wt32", sizeof(cfg->hostname) - 1);
 
     strncpy(cfg->tz_posix, "UTC0", sizeof(cfg->tz_posix) - 1);
     strncpy(cfg->ntp_server, "pool.ntp.org", sizeof(cfg->ntp_server) - 1);
@@ -35,7 +36,7 @@ void app_config_reset_defaults(app_config_t *cfg)
 
     cfg->audio_muted = false;
 
-    cfg->github_repo[0] = '\0'; /* e.g. "yourname/wt32-smalltv" - set from the web UI's Firmware tab */
+    cfg->github_repo[0] = '\0'; /* e.g. "yourname/wt32" - set from the web UI's Firmware tab */
 
     cfg->first_boot_done = false;
 }

@@ -4,10 +4,13 @@
  *        LVGL album screen.
  *
  * Supported formats: 24-bit uncompressed .bmp (always available, zero
- * third-party dependencies) and baseline .jpg/.jpeg (via the managed
- * `espressif/esp_jpeg` component - see README "Photo album" section for
- * caveats). Images are decoded, then nearest-neighbor scaled to exactly
- * fill the requested canvas (typically the panel's 480x320 resolution).
+ * third-party dependencies), baseline .jpg/.jpeg (via the managed
+ * `espressif/esp_jpeg` component), and .png of any bit depth/color type
+ * (via the managed `espressif/libpng` component - see README "Photo album"
+ * section for caveats on the last two). Images are decoded, then
+ * nearest-neighbor scaled to exactly fill the requested canvas (typically
+ * the panel's 480x320 resolution). PNG transparency is ignored (flattened
+ * to opaque) since photos are shown full-screen with nothing behind them.
  */
 #pragma once
 

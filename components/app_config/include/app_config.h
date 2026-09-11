@@ -17,7 +17,7 @@
 extern "C" {
 #endif
 
-#define APP_CONFIG_VERSION      4
+#define APP_CONFIG_VERSION      5
 
 #define APP_CFG_SSID_MAX_LEN    32
 #define APP_CFG_PASS_MAX_LEN    64
@@ -36,6 +36,10 @@ typedef struct {
     char     wifi_ssid[APP_CFG_SSID_MAX_LEN];
     char     wifi_password[APP_CFG_PASS_MAX_LEN];
     char     hostname[APP_CFG_STR_MAX_LEN];
+    /* Fallback SoftAP password. Empty (the default) = open network, no
+     * password - easiest for first-time setup. Set from the web UI to
+     * require a password (WPA2-PSK) on the SoftAP instead. */
+    char     ap_password[APP_CFG_PASS_MAX_LEN];
 
     /* --- Time --- */
     char     tz_posix[APP_CFG_TZ_MAX_LEN];  /* e.g. "KST-9" or "PST8PDT,M3.2.0,M11.1.0" */

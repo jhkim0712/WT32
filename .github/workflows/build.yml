@@ -3,7 +3,7 @@ name: Build firmware
 # Builds after a PR merges into main (the "push" trigger below), and also on
 # every PR so a broken build is caught before merge rather than after. The
 # ESP-IDF version pinned here (release-v6.1) should track the version in
-# README.md / .devcontainer.
+# README.md.
 on:
   push:
     branches: [ "main" ]
@@ -35,9 +35,9 @@ jobs:
         if: success()
         uses: actions/upload-artifact@v4
         with:
-          name: wt32_smalltv-firmware
+          name: wt32-firmware
           path: |
-            build/wt32_smalltv.bin
+            build/wt32_firmware.bin
             build/bootloader/bootloader.bin
             build/partition_table/partition-table.bin
             build/ota_data_initial.bin

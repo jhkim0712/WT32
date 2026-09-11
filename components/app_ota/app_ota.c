@@ -26,7 +26,7 @@ static const char *TAG = "app_ota";
 
 /* Must match the `project()` name in the top-level CMakeLists.txt - that
  * string is what ESP-IDF bakes into every image's esp_app_desc_t.project_name. */
-#define FIRMWARE_PROJECT_NAME "wt32_smalltv"
+#define FIRMWARE_PROJECT_NAME "wt32_firmware"
 
 #define VALIDATE_HEADER_LEN 512
 #define GITHUB_JSON_MAX_LEN  8192
@@ -143,7 +143,7 @@ esp_err_t app_ota_check_github(const char *owner_repo,
     if (!client) {
         return ESP_FAIL;
     }
-    esp_http_client_set_header(client, "User-Agent", "wt32-smalltv-ota");
+    esp_http_client_set_header(client, "User-Agent", "wt32-ota");
     esp_http_client_set_header(client, "Accept", "application/vnd.github+json");
 
     esp_err_t ret = esp_http_client_open(client, 0);
@@ -268,7 +268,7 @@ static void ota_url_task(void *arg)
     err = esp_https_ota_get_img_desc(handle, &desc);
     if (err != ESP_OK || !validate_app_desc(&desc)) {
         ESP_LOGW(TAG, "Downloaded image failed the firmware identity check");
-        set_status(APP_OTA_STATE_ERROR, "This file is not a WT32 SmallTV firmware image", -1);
+        set_status(APP_OTA_STATE_ERROR, "This file is not a WT32 firmware image", -1);
         esp_https_ota_abort(handle);
         goto done;
     }
