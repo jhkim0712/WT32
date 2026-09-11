@@ -56,9 +56,11 @@ CONFIG_FATFS_CODEPAGE_DYNAMIC=y
 # LVGL (component config -> LVGL)
 #
 CONFIG_LV_COLOR_DEPTH_16=y
-CONFIG_LV_COLOR_16_SWAP=y
+# Byte swapping is handled per-display by esp_lvgl_port's `.flags.swap_bytes`
+# (see bsp_display.c) - LVGL v9 has no global LV_COLOR_16_SWAP option
+# anymore, so don't re-add one here (it would double-swap the bytes).
 CONFIG_LV_USE_LOG=y
-CONFIG_LV_MEM_CUSTOM=y
+CONFIG_LV_USE_CLIB_MALLOC=y # use malloc/free (can draw from PSRAM) instead of LVGL's small built-in pool
 CONFIG_LV_USE_PERF_MONITOR=n
 CONFIG_LV_FONT_MONTSERRAT_14=y
 CONFIG_LV_FONT_MONTSERRAT_16=y
