@@ -8,5 +8,7 @@ idf_component_register(
         esp_event
         nvs_flash
         lwip
+        mdns
+        esp_hw_support
         app_config
 )

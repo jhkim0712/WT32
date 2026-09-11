@@ -17,7 +17,7 @@
 extern "C" {
 #endif
 
-#define APP_CONFIG_VERSION      3
+#define APP_CONFIG_VERSION      4
 
 #define APP_CFG_SSID_MAX_LEN    32
 #define APP_CFG_PASS_MAX_LEN    64
@@ -55,6 +55,9 @@ typedef struct {
 
     /* --- Audio --- */
     bool     audio_muted;
+
+    /* --- Firmware updates --- */
+    char     github_repo[APP_CFG_STR_MAX_LEN]; /* "owner/name", used by the web UI's "Check for updates" */
 
     /* --- Misc --- */
     bool     first_boot_done;

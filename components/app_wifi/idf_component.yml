@@ -1,0 +1,6 @@
+## mdns has been a managed (registry) component since ESP-IDF v5.0, not part
+## of the core "components/" tree - listing it in CMakeLists.txt REQUIRES
+## alone is not enough to fetch it, it must be declared here too.
+dependencies:
+  idf: ">=6.0"
+  espressif/mdns: "^1.0"

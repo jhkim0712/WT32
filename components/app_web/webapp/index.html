@@ -1,0 +1,156 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>WT32 SmallTV</title>
+<link rel="stylesheet" href="/style.css">
+</head>
+<body>
+<header class="topbar">
+  <div class="brand">
+    <span class="dot" id="statusDot"></span>
+    <h1>WT32 SmallTV</h1>
+  </div>
+  <div class="fw" id="fwVersion">v-</div>
+</header>
+
+<nav class="tabs" id="tabs">
+  <button class="tab active" data-tab="status">Status</button>
+  <button class="tab" data-tab="wifi">Wi-Fi</button>
+  <button class="tab" data-tab="clock">Clock</button>
+  <button class="tab" data-tab="display">Display</button>
+  <button class="tab" data-tab="album">Album</button>
+  <button class="tab" data-tab="firmware">Firmware</button>
+  <button class="tab" data-tab="system">System</button>
+</nav>
+
+<main>
+  <section id="panel-status" class="panel active">
+    <div class="card">
+      <div class="grid2">
+        <div><span class="label">Mode</span><span class="value" id="stMode">-</span></div>
+        <div><span class="label">IP address</span><span class="value" id="stIp">-</span></div>
+        <div><span class="label">Wi-Fi signal</span><span class="value" id="stRssi">-</span></div>
+        <div><span class="label">SD card</span><span class="value" id="stSd">-</span></div>
+        <div><span class="label">Photos found</span><span class="value" id="stPhotos">-</span></div>
+        <div><span class="label">Time</span><span class="value" id="stTime">-</span></div>
+        <div><span class="label">Uptime</span><span class="value" id="stUptime">-</span></div>
+        <div><span class="label">Free heap</span><span class="value" id="stHeap">-</span></div>
+      </div>
+    </div>
+  </section>
+
+  <section id="panel-wifi" class="panel">
+    <div class="card">
+      <h2>Join a network</h2>
+      <p class="hint">Current: <b id="wifiCurrentSsid">-</b></p>
+      <div class="row">
+        <button id="btnScan" class="btn">Scan networks</button>
+      </div>
+      <ul id="wifiList" class="list"></ul>
+      <form id="wifiForm">
+        <label>SSID<input type="text" id="wifiSsid" required></label>
+        <label>Password<input type="password" id="wifiPass"></label>
+        <button type="submit" class="btn primary">Connect</button>
+        <span id="wifiMsg" class="msg"></span>
+      </form>
+    </div>
+  </section>
+
+  <section id="panel-clock" class="panel">
+    <div class="card">
+      <h2>Clock</h2>
+      <label>Timezone (POSIX TZ string)
+        <input type="text" id="tz" placeholder="e.g. KST-9 or PST8PDT,M3.2.0,M11.1.0">
+      </label>
+      <p class="hint">Common: UTC0, KST-9 (Korea), JST-9 (Japan), CST-8 (China),
+        EST5EDT (US East, DST), PST8PDT (US West, DST), CET-1CEST,M3.5.0,M10.5.0/3 (EU).</p>
+      <label>NTP server<input type="text" id="ntp"></label>
+      <label class="switch-row"><input type="checkbox" id="time24h"> 24-hour clock</label>
+      <label class="switch-row"><input type="checkbox" id="chime"> Hourly chime</label>
+      <div class="row"><button id="btnSaveClock" class="btn primary">Save</button><span id="clockMsg" class="msg"></span></div>
+    </div>
+  </section>
+
+  <section id="panel-display" class="panel">
+    <div class="card">
+      <h2>Display</h2>
+      <label>Brightness <span id="brightnessVal">80</span>%
+        <input type="range" id="brightness" min="5" max="100" value="80">
+      </label>
+      <label class="switch-row"><input type="checkbox" id="autoCycle"> Auto-cycle through screens</label>
+      <label>Seconds per screen<input type="number" id="cycleSeconds" min="3" max="120"></label>
+      <label class="switch-row"><input type="checkbox" id="audioMuted"> Mute speaker</label>
+      <div class="row"><button id="btnSaveDisplay" class="btn primary">Save</button><span id="displayMsg" class="msg"></span></div>
+    </div>
+  </section>
+
+  <section id="panel-album" class="panel">
+    <div class="card">
+      <h2>Photo album</h2>
+      <p class="hint">Copy <code>.bmp</code> or <code>.jpg</code> images into <code>/photos</code> on the
+        microSD card. 480x320 images look best; others are auto-scaled.</p>
+      <label>Slide interval (seconds)<input type="number" id="albumInterval" min="2" max="600"></label>
+      <label class="switch-row"><input type="checkbox" id="albumShuffle"> Shuffle order</label>
+      <div class="row"><button id="btnSaveAlbum" class="btn primary">Save</button><span id="albumMsg" class="msg"></span></div>
+    </div>
+  </section>
+
+  <section id="panel-firmware" class="panel">
+    <div class="card">
+      <h2>Firmware</h2>
+      <div class="grid2">
+        <div><span class="label">Running version</span><span class="value" id="fwCurrentVersion">-</span></div>
+        <div><span class="label">Update status</span><span class="value" id="fwState">Idle</span></div>
+      </div>
+      <div class="progress" id="fwProgressWrap" hidden>
+        <div class="progress-bar" id="fwProgressBar"></div>
+      </div>
+
+      <hr>
+      <h3>Check GitHub releases</h3>
+      <label>Repository (owner/name)<input type="text" id="githubRepo" placeholder="yourname/wt32-smalltv"></label>
+      <p class="hint">Looks for a release asset named <code>firmware.bin</code> (or the first
+        <code>.bin</code> asset) on the latest release.</p>
+      <div class="row">
+        <button id="btnSaveRepo" class="btn">Save repository</button>
+        <button id="btnCheckUpdate" class="btn primary">Check for updates</button>
+        <span id="fwCheckMsg" class="msg"></span>
+      </div>
+      <div id="fwUpdateBox" class="update-box" hidden>
+        <p><b>Version <span id="fwLatestVersion">-</span></b> is available.</p>
+        <p class="hint" id="fwNotes"></p>
+        <button id="btnInstallUpdate" class="btn primary">Install update</button>
+      </div>
+
+      <hr>
+      <h3>Manual upload</h3>
+      <p class="hint">Upload a <code>.bin</code> file built for this board. The firmware checks
+        that it's actually a WT32 SmallTV image before installing it.</p>
+      <input type="file" id="fwFile" accept=".bin">
+      <div class="row">
+        <button id="btnUpload" class="btn primary">Upload &amp; install</button>
+        <span id="fwUploadMsg" class="msg"></span>
+      </div>
+    </div>
+  </section>
+
+  <section id="panel-system" class="panel">
+    <div class="card">
+      <h2>System</h2>
+      <label>Device hostname<input type="text" id="hostname" placeholder="wt32-smalltv"></label>
+      <div class="row"><button id="btnSaveSystem" class="btn primary">Save</button><span id="systemMsg" class="msg"></span></div>
+      <hr>
+      <div class="row">
+        <button id="btnRestart" class="btn">Restart device</button>
+        <button id="btnFactoryReset" class="btn danger">Factory reset</button>
+      </div>
+      <p class="hint">Firmware: <a href="https://github.com/" target="_blank" rel="noopener">WT32-SC01 Plus SmallTV</a> project.</p>
+    </div>
+  </section>
+</main>
+
+<script src="/app.js"></script>
+</body>
+</html>

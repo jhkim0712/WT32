@@ -12,11 +12,13 @@
  */
 #include <string.h>
 #include <stdio.h>
+#include <stdbool.h>
 #include "esp_log.h"
 #include "esp_wifi.h"
 #include "esp_netif.h"
 #include "esp_event.h"
 #include "esp_mac.h"
+#include "mdns.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/event_groups.h"
 
@@ -122,6 +124,14 @@ esp_err_t app_wifi_start(void)
     if (app_cfg->hostname[0]) {
         esp_netif_set_hostname(s_sta_netif, app_cfg->hostname);
         esp_netif_set_hostname(s_ap_netif, app_cfg->hostname);
+    }
+
+    if (mdns_init() == ESP_OK) {
+        mdns_hostname_set(app_cfg->hostname[0] ? app_cfg->hostname : "wt32-smalltv");
+        mdns_instance_name_set("WT32 SmallTV");
+        mdns_service_add(NULL, "_http", "_tcp", 80, NULL, 0);
+    } else {
+        ESP_LOGW(TAG, "mdns_init failed - the device will only be reachable by IP address");
     }
 
     ESP_ERROR_CHECK(esp_wifi_start());

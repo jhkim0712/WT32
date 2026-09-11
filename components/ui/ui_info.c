@@ -4,9 +4,8 @@
 #include "esp_timer.h"
 #include "ui_internal.h"
 #include "app_wifi.h"
+#include "app_ota.h"
 #include "bsp/bsp_board.h"
-
-#define FW_VERSION "1.0.0"
 
 static lv_obj_t *s_label;
 
@@ -17,6 +16,8 @@ static void update_cb(lv_timer_t *t)
     app_wifi_get_ip_str(ip, sizeof(ip));
     char ap_ssid[33] = {0};
     app_wifi_get_ap_ssid(ap_ssid, sizeof(ap_ssid));
+    char fw_version[32];
+    app_ota_get_current_version(fw_version, sizeof(fw_version));
 
     int64_t uptime_s = esp_timer_get_time() / 1000000;
     uint32_t heap_kb = esp_get_free_heap_size() / 1024;
@@ -31,7 +32,7 @@ static void update_cb(lv_timer_t *t)
                  "Configure at http://%s/\n\n"
                  "SD card: %s\n"
                  "Uptime: %" PRId64 "s   Free heap: %" PRIu32 " KB",
-                 FW_VERSION, app_wifi_get_rssi(), ip, ip, sd_status, uptime_s, heap_kb);
+                 fw_version, app_wifi_get_rssi(), ip, ip, sd_status, uptime_s, heap_kb);
     } else {
         snprintf(buf, sizeof(buf),
                  "WT32 SmallTV  -  fw %s\n\n"
@@ -40,7 +41,7 @@ static void update_cb(lv_timer_t *t)
                  "then open http://%s/\n\n"
                  "SD card: %s\n"
                  "Uptime: %" PRId64 "s   Free heap: %" PRIu32 " KB",
-                 FW_VERSION, ap_ssid, ip, sd_status, uptime_s, heap_kb);
+                 fw_version, ap_ssid, ip, sd_status, uptime_s, heap_kb);
     }
     lv_label_set_text(s_label, buf);
 }

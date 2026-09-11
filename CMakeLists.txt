@@ -5,4 +5,8 @@
 cmake_minimum_required(VERSION 3.16)
 
 include($ENV{IDF_PATH}/tools/cmake/project.cmake)
-project(WT32)
+# NOTE: this name is baked into every built image's esp_app_desc_t.project_name
+# and is what components/app_ota checks before installing an update (see
+# FIRMWARE_PROJECT_NAME in components/app_ota/app_ota.c) - don't rename it
+# without updating that constant too.
+project(wt32_smalltv)

@@ -26,6 +26,18 @@ CONFIG_ESP_MAIN_TASK_STACK_SIZE=8192
 CONFIG_FREERTOS_HZ=1000
 
 #
+# OTA updates (components/app_ota)
+#
+# Auto-rollback safety net: a newly flashed image must reach
+# app_ota_confirm_boot() (called at the end of app_main(), after the UI is
+# up) or the bootloader reverts to the previous working image on next boot.
+CONFIG_BOOTLOADER_APP_ROLLBACK_ENABLE=y
+# Needed to verify github.com/api.github.com's TLS certificate when checking
+# for/downloading updates, without pinning a specific CA that can expire.
+CONFIG_MBEDTLS_CERTIFICATE_BUNDLE=y
+CONFIG_MBEDTLS_CERTIFICATE_BUNDLE_DEFAULT_FULL=y
+
+#
 # Wi-Fi / networking
 #
 CONFIG_ESP_WIFI_STA_DISCONNECTED_PM_ENABLE=n

@@ -35,6 +35,8 @@ void app_config_reset_defaults(app_config_t *cfg)
 
     cfg->audio_muted = false;
 
+    cfg->github_repo[0] = '\0'; /* e.g. "yourname/wt32-smalltv" - set from the web UI's Firmware tab */
+
     cfg->first_boot_done = false;
 }
 

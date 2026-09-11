@@ -1,0 +1,5 @@
+## ESP-IDF v6.0 removed the built-in "json" component - cJSON now comes from
+## the component registry instead (same "cJSON.h" API, no code changes needed).
+dependencies:
+  idf: ">=6.0"
+  espressif/cjson: "^1.7.19"

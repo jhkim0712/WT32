@@ -66,6 +66,12 @@ env/
 .ccls-cache/
 compile_commands.json
 
+# VS Code - the ESP-IDF extension bakes this machine's absolute toolchain
+# paths (compiler, clangd, OpenOCD adapter, ESP-IDF install dir) into these
+# files, so they are not portable between contributors' machines.
+# (.clangd at the project root is a separate, portable file and IS tracked.)
+.vscode/
+
 # Windows specific
 Thumbs.db
 ehthumbs.db

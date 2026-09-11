@@ -13,5 +13,7 @@ idf_component_register(
         app_time
         app_photo
         app_wifi
+        app_ota
         esp_timer
+        esp_system
 )

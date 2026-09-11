@@ -3,11 +3,13 @@
  * @brief Display (ST7796, 8080/i80 parallel bus) + capacitive touch (FT6336U)
  *        bring-up, wired into LVGL through esp_lvgl_port.
  *
- * Targets ESP-IDF >= 5.2 (new `driver/i2c_master.h` I2C driver and the
- * `esp_lcd_new_i80_bus()` / `esp_lcd_new_panel_io_i80()` APIs). If the
- * physical image comes up mirrored, rotated or color-inverted, that is a
- * per-panel-batch quirk - adjust the esp_lcd_panel_* calls near the bottom
- * of bsp_display_start(), not the pin map.
+ * Targets ESP-IDF >= 6.0: the new `driver/i2c_master.h` I2C driver, the
+ * `esp_lcd_new_i80_bus()` / `esp_lcd_new_panel_io_i80()` APIs, and the
+ * post-v6.0 struct shapes (`esp_lcd_i80_bus_config_t::dma_burst_size`,
+ * `esp_lcd_panel_dev_config_t::rgb_ele_order`). If the physical image comes
+ * up mirrored, rotated or color-inverted, that is a per-panel-batch quirk -
+ * adjust the esp_lcd_panel_* calls near the bottom of bsp_display_start(),
+ * not the pin map.
  */
 #include <string.h>
 #include "esp_check.h"
@@ -104,8 +106,7 @@ static esp_lcd_i80_bus_handle_t bsp_lcd_new_bus(void)
         },
         .bus_width = 8,
         .max_transfer_bytes = BSP_LCD_H_RES * BSP_LCD_DRAW_BUF_LINES * sizeof(uint16_t),
-        .psram_trans_align = 64,
-        .sram_trans_align = 4,
+        .dma_burst_size = 64, /* ESP-IDF >= v6.0: replaces the old psram/sram_trans_align pair */
     };
     ESP_ERROR_CHECK(esp_lcd_new_i80_bus(&bus_config, &bus));
     return bus;

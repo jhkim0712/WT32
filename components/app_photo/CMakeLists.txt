@@ -6,5 +6,5 @@ idf_component_register(
         "app_photo_resize.c"
     INCLUDE_DIRS "include"
     PRIV_INCLUDE_DIRS "."
-    REQUIRES fatfs esp_jpeg
+    REQUIRES fatfs esp_jpeg esp_hw_support
 )
