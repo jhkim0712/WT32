@@ -19,7 +19,8 @@
 
 static const char *TAG = "app_photo_jpeg";
 
-esp_err_t app_photo_jpeg_decode_native(const char *path, uint16_t **out_buf, uint16_t *out_w, uint16_t *out_h)
+esp_err_t app_photo_jpeg_decode_native(const char *path, uint16_t target_w, uint16_t target_h,
+                                        uint16_t **out_buf, uint16_t *out_w, uint16_t *out_h)
 {
     FILE *f = fopen(path, "rb");
     if (!f) {
@@ -58,11 +59,39 @@ esp_err_t app_photo_jpeg_decode_native(const char *path, uint16_t **out_buf, uin
     };
     esp_jpeg_image_output_t out_img = {0};
 
+    /* First pass at scale 0 just to learn the native resolution - cheap,
+     * esp_jpeg_get_image_info() never touches outbuf/outbuf_size. */
     esp_err_t ret = esp_jpeg_get_image_info(&cfg, &out_img);
     if (ret != ESP_OK) {
         ESP_LOGW(TAG, "%s: failed to parse JPEG header (%s)", path, esp_err_to_name(ret));
         free(jpg_data);
         return ret;
+    }
+
+    /* Pick the smallest decode scale (largest divisor) whose result still
+     * covers the requested canvas in both dimensions, so we never decode a
+     * multi-megapixel phone photo at full native resolution just to shrink
+     * it back down to a 480x320 screen. */
+    if (target_w > 0 && target_h > 0) {
+        if (out_img.width >= target_w * 8 && out_img.height >= target_h * 8) {
+            cfg.out_scale = JPEG_IMAGE_SCALE_1_8;
+        } else if (out_img.width >= target_w * 4 && out_img.height >= target_h * 4) {
+            cfg.out_scale = JPEG_IMAGE_SCALE_1_4;
+        } else if (out_img.width >= target_w * 2 && out_img.height >= target_h * 2) {
+            cfg.out_scale = JPEG_IMAGE_SCALE_1_2;
+        }
+    }
+
+    if (cfg.out_scale != JPEG_IMAGE_SCALE_0) {
+        /* Re-query at the chosen scale: output_len/width/height above were
+         * for scale 0 (native) and don't reflect the shrunk size. */
+        cfg.priv.read = 0;
+        ret = esp_jpeg_get_image_info(&cfg, &out_img);
+        if (ret != ESP_OK) {
+            ESP_LOGW(TAG, "%s: failed to re-parse JPEG header at scale (%s)", path, esp_err_to_name(ret));
+            free(jpg_data);
+            return ret;
+        }
     }
 
     size_t out_size = out_img.output_len;

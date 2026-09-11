@@ -129,7 +129,7 @@ esp_err_t app_photo_decode_to_canvas(size_t index, uint16_t canvas_w, uint16_t c
     } else if (has_extension(path, ".png")) {
         ret = app_photo_png_decode_native(path, &native, &native_w, &native_h);
     } else {
-        ret = app_photo_jpeg_decode_native(path, &native, &native_w, &native_h);
+        ret = app_photo_jpeg_decode_native(path, canvas_w, canvas_h, &native, &native_w, &native_h);
     }
 
     if (ret != ESP_OK) {

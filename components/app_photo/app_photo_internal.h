@@ -13,7 +13,15 @@
 #define PHOTO_MAX_DECODE_BYTES (3 * 1024 * 1024)
 
 esp_err_t app_photo_bmp_decode_native(const char *path, uint16_t **out_buf, uint16_t *out_w, uint16_t *out_h);
-esp_err_t app_photo_jpeg_decode_native(const char *path, uint16_t **out_buf, uint16_t *out_w, uint16_t *out_h);
+/** JPEG decode is scale-aware: the decoder can produce the image pre-shrunk
+ *  by 1/2, 1/4 or 1/8 (esp_jpeg's out_scale), so pass the eventual canvas
+ *  size the caller wants it resized down to. That lets us pick the smallest
+ *  decode scale that still covers the canvas, instead of always decoding a
+ *  phone photo at its full native resolution (which for a typical 12MP JPEG
+ *  needs tens of MB just for the RGB565 buffer and reliably fails with
+ *  ESP_ERR_NO_MEM). */
+esp_err_t app_photo_jpeg_decode_native(const char *path, uint16_t target_w, uint16_t target_h,
+                                        uint16_t **out_buf, uint16_t *out_w, uint16_t *out_h);
 esp_err_t app_photo_png_decode_native(const char *path, uint16_t **out_buf, uint16_t *out_w, uint16_t *out_h);
 
 /** Nearest-neighbor resize src (src_w x src_h) into a freshly malloc'd
