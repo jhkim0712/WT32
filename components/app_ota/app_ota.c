@@ -126,7 +126,13 @@ esp_err_t app_ota_check_github(const char *owner_repo,
                                 char *out_notes, size_t notes_len)
 {
     char url[192];
+    /* owner_repo is always a short "owner/name" string (app_config caps it at
+     * APP_CFG_STR_MAX_LEN=64) - GCC can't see that bound from here, so
+     * silence the truncation warning instead of restructuring around it. */
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wformat-truncation"
     snprintf(url, sizeof(url), "https://api.github.com/repos/%s/releases/latest", owner_repo);
+#pragma GCC diagnostic pop
 
     esp_http_client_config_t config = {
         .url = url,

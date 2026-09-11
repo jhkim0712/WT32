@@ -62,7 +62,14 @@ esp_err_t app_photo_scan(const char *dir_path)
         if (!is_supported_image(entry->d_name)) {
             continue;
         }
+        /* GCC can't prove dir_path + d_name always fits APP_PHOTO_PATH_MAX (it
+         * can't see that dir_path is always our short, fixed "/sdcard/photos"
+         * call site) - safe truncation is fine here, so silence the warning
+         * instead of restructuring around a limit that isn't really at risk. */
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wformat-truncation"
         snprintf(s_paths[s_count], APP_PHOTO_PATH_MAX, "%s/%s", dir_path, entry->d_name);
+#pragma GCC diagnostic pop
         s_order[s_count] = s_count;
         s_count++;
     }

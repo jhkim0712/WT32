@@ -24,6 +24,12 @@ static void update_cb(lv_timer_t *t)
     const char *sd_status = bsp_sdcard_is_mounted() ? "mounted" : "not found";
 
     char buf[400];
+    /* buf is comfortably larger than every field's actual declared size, but
+     * sd_status is a `const char *` (not a fixed array) so GCC can't verify
+     * that bound here - silence the truncation warning rather than
+     * restructure around it. */
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wformat-truncation"
     if (app_wifi_get_mode() == APP_WIFI_MODE_STA) {
         snprintf(buf, sizeof(buf),
                  "WT32 SmallTV  -  fw %s\n\n"
@@ -43,6 +49,7 @@ static void update_cb(lv_timer_t *t)
                  "Uptime: %" PRId64 "s   Free heap: %" PRIu32 " KB",
                  fw_version, ap_ssid, ip, sd_status, uptime_s, heap_kb);
     }
+#pragma GCC diagnostic pop
     lv_label_set_text(s_label, buf);
 }
 

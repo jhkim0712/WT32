@@ -343,7 +343,13 @@ static esp_err_t send_json_error(httpd_req_t *req, const char *status, const cha
     httpd_resp_set_status(req, status);
     httpd_resp_set_type(req, "application/json");
     char buf[192];
+    /* "error" is always one of this file's own short literal error codes -
+     * GCC can't see that from a `const char *` parameter, so silence the
+     * truncation warning instead of restructuring around it. */
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wformat-truncation"
     snprintf(buf, sizeof(buf), "{\"ok\":false,\"error\":\"%s\"}", error);
+#pragma GCC diagnostic pop
     return httpd_resp_sendstr(req, buf);
 }
 
