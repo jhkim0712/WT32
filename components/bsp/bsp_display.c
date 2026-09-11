@@ -296,8 +296,8 @@ lv_display_t *bsp_display_start(void)
     ESP_ERROR_CHECK(esp_lcd_panel_mirror(panel_handle, false, false));
     ESP_ERROR_CHECK(esp_lcd_panel_disp_on_off(panel_handle, true));
 
-    bsp_display_set_backlight(80); /* needs to be on to see the test pattern below */
-    bsp_display_test_pattern(panel_handle); /* TEMPORARY - see its own doc comment */
+    //bsp_display_set_backlight(80); /* needs to be on to see the test pattern below */
+    //bsp_display_test_pattern(panel_handle); /* TEMPORARY - see its own doc comment */
 
     ESP_LOGI(TAG, "Initializing touch controller (FT6336U)");
     i2c_master_bus_handle_t i2c_bus = bsp_i2c_init();
