@@ -1,0 +1,138 @@
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <stdbool.h>
+#include <dirent.h>
+#include <sys/stat.h>
+#include "esp_log.h"
+#include "esp_random.h"
+
+#include "app_photo.h"
+#include "app_photo_internal.h"
+
+static const char *TAG = "app_photo";
+
+#define APP_PHOTO_MAX_ENTRIES 400
+
+static char (*s_paths)[APP_PHOTO_PATH_MAX] = NULL;
+static size_t s_capacity = 0;
+static size_t s_count = 0;
+static size_t *s_order = NULL; /* playback order, indexes into s_paths */
+
+static bool has_extension(const char *name, const char *ext)
+{
+    size_t name_len = strlen(name);
+    size_t ext_len = strlen(ext);
+    if (name_len < ext_len) {
+        return false;
+    }
+    return strcasecmp(name + (name_len - ext_len), ext) == 0;
+}
+
+static bool is_supported_image(const char *name)
+{
+    return has_extension(name, ".bmp") || has_extension(name, ".jpg") || has_extension(name, ".jpeg");
+}
+
+esp_err_t app_photo_scan(const char *dir_path)
+{
+    DIR *dir = opendir(dir_path);
+    if (!dir) {
+        ESP_LOGW(TAG, "Could not open %s (SD card not mounted, or folder missing)", dir_path);
+        s_count = 0;
+        return ESP_ERR_NOT_FOUND;
+    }
+
+    if (!s_paths) {
+        s_capacity = APP_PHOTO_MAX_ENTRIES;
+        s_paths = malloc(s_capacity * APP_PHOTO_PATH_MAX);
+        s_order = malloc(s_capacity * sizeof(size_t));
+        if (!s_paths || !s_order) {
+            closedir(dir);
+            return ESP_ERR_NO_MEM;
+        }
+    }
+
+    s_count = 0;
+    struct dirent *entry;
+    while ((entry = readdir(dir)) != NULL && s_count < s_capacity) {
+        if (entry->d_type == DT_DIR) {
+            continue;
+        }
+        if (!is_supported_image(entry->d_name)) {
+            continue;
+        }
+        snprintf(s_paths[s_count], APP_PHOTO_PATH_MAX, "%s/%s", dir_path, entry->d_name);
+        s_order[s_count] = s_count;
+        s_count++;
+    }
+    closedir(dir);
+
+    ESP_LOGI(TAG, "Found %u image(s) in %s", (unsigned)s_count, dir_path);
+    return ESP_OK;
+}
+
+size_t app_photo_count(void)
+{
+    return s_count;
+}
+
+const char *app_photo_get_path(size_t index)
+{
+    if (index >= s_count) {
+        return NULL;
+    }
+    return s_paths[s_order[index]];
+}
+
+void app_photo_shuffle(void)
+{
+    if (s_count < 2) {
+        return;
+    }
+    for (size_t i = s_count - 1; i > 0; i--) {
+        size_t j = esp_random() % (i + 1);
+        size_t tmp = s_order[i];
+        s_order[i] = s_order[j];
+        s_order[j] = tmp;
+    }
+}
+
+void app_photo_unshuffle(void)
+{
+    for (size_t i = 0; i < s_count; i++) {
+        s_order[i] = i;
+    }
+}
+
+esp_err_t app_photo_decode_to_canvas(size_t index, uint16_t canvas_w, uint16_t canvas_h, uint16_t **out_buf)
+{
+    const char *path = app_photo_get_path(index);
+    if (!path) {
+        return ESP_ERR_INVALID_ARG;
+    }
+
+    uint16_t *native = NULL;
+    uint16_t native_w = 0, native_h = 0;
+    esp_err_t ret;
+
+    if (has_extension(path, ".bmp")) {
+        ret = app_photo_bmp_decode_native(path, &native, &native_w, &native_h);
+    } else {
+        ret = app_photo_jpeg_decode_native(path, &native, &native_w, &native_h);
+    }
+
+    if (ret != ESP_OK) {
+        ESP_LOGW(TAG, "Failed to decode %s: %s", path, esp_err_to_name(ret));
+        return ret;
+    }
+
+    uint16_t *scaled = app_photo_resize_rgb565(native, native_w, native_h, canvas_w, canvas_h);
+    free(native);
+    if (!scaled) {
+        return ESP_ERR_NO_MEM;
+    }
+
+    *out_buf = scaled;
+    return ESP_OK;
+}
