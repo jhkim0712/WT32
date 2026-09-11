@@ -104,10 +104,14 @@ The component manager will fetch the managed dependencies
 3. Open the **Wi-Fi** tab, scan, pick your network, enter its password and
    press *Connect*. On success the device joins your network and the
    settings persist across reboots.
-4. The SoftAP (and its captive portal) stay available at all times as a
-   fallback, so the web UI is always reachable even if the home network is
-   down - either via the AP or via `http://<device-ip>/` /
-   `http://wt32.local/` once joined. You can give the fallback AP a password
+4. The SoftAP itself stays available at all times as a fallback, so the web
+   UI is always reachable even if the home network is down - either via the
+   AP (browse to `http://192.168.4.1/` manually) or via `http://<device-ip>/`
+   / `http://wt32.local/` once joined. The automatic captive-portal popup
+   only fires while the device *isn't* connected to your Wi-Fi, though -
+   once it joins, reconnecting to the fallback AP later (e.g. from a second
+   device, to reach the config page without knowing the home-network IP)
+   won't nag you with a sign-in prompt every time. You can give the fallback AP a password
    from the **System** tab if an open network next to it makes you uneasy.
 5. Set your timezone, NTP server and any other preferences from the other
    tabs.

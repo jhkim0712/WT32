@@ -1,14 +1,22 @@
 /**
  * @file app_wifi.c
- * @brief Always-on SoftAP (+ captive-portal DNS) combined with a best-effort
- *        STA connection to the network stored in app_config.
+ * @brief Always-on SoftAP combined with a best-effort STA connection to the
+ *        network stored in app_config.
  *
  * The device runs WIFI_MODE_APSTA at all times: the AP radio guarantees the
- * web configurator (app_web) and its captive portal are reachable even when
- * no home network is configured yet, or the configured one is unreachable;
- * the STA radio joins the configured network in the background and keeps
- * retrying forever on disconnect, so the device recovers automatically once
- * the router is back.
+ * web configurator (app_web) is reachable even when no home network is
+ * configured yet, or the configured one is unreachable; the STA radio joins
+ * the configured network in the background and keeps retrying forever on
+ * disconnect, so the device recovers automatically once the router is back.
+ *
+ * The captive-portal DNS hijack (dns_server.c), however, only runs while
+ * *not* connected to STA - it's what makes phones/PCs auto-pop the "sign in
+ * to network" browser the moment they join the AP, which is exactly what we
+ * want during first-time setup but becomes an unwanted recurring nag (e.g.
+ * Windows repeatedly opening a browser) for anyone who joins the AP again
+ * later just to reach the device, while it's already on the home network.
+ * The AP keeps broadcasting either way - http://192.168.4.1/ always works
+ * manually - only the automatic captive-portal popup is conditional.
  */
 #include <string.h>
 #include <stdio.h>
@@ -39,6 +47,7 @@ static esp_netif_t *s_ap_netif = NULL;
 static volatile bool s_connected = false;
 static bool s_have_creds = false;
 static char s_ap_ssid[33] = {0};
+static uint32_t s_ap_ip_addr = 0; /* cached at startup, for re-arming dns_server_start() */
 
 static void event_handler(void *arg, esp_event_base_t event_base, int32_t event_id, void *event_data)
 {
@@ -49,6 +58,7 @@ static void event_handler(void *arg, esp_event_base_t event_base, int32_t event_
     } else if (event_base == WIFI_EVENT && event_id == WIFI_EVENT_STA_DISCONNECTED) {
         s_connected = false;
         xEventGroupClearBits(s_wifi_event_group, WIFI_CONNECTED_BIT);
+        dns_server_start(s_ap_ip_addr); /* re-arm the captive portal - no-op if already running */
         if (s_have_creds) {
             /* Keep trying forever - the router may come back later. */
             esp_wifi_connect();
@@ -58,6 +68,12 @@ static void event_handler(void *arg, esp_event_base_t event_base, int32_t event_
         ESP_LOGI(TAG, "STA got IP: " IPSTR, IP2STR(&evt->ip_info.ip));
         s_connected = true;
         xEventGroupSetBits(s_wifi_event_group, WIFI_CONNECTED_BIT);
+        /* Stop hijacking DNS on the AP now that we're on a real network -
+         * otherwise anyone who reconnects to the fallback AP later (e.g. to
+         * reach the device without knowing its home-network IP) gets an
+         * unwanted "sign in to network" popup every time. The AP itself
+         * keeps broadcasting regardless - see the file-level comment. */
+        dns_server_stop();
     } else if (event_base == WIFI_EVENT && event_id == WIFI_EVENT_AP_STACONNECTED) {
         ESP_LOGI(TAG, "A client joined the SoftAP");
     } else if (event_base == WIFI_EVENT && event_id == WIFI_EVENT_AP_STADISCONNECTED) {
@@ -149,11 +165,17 @@ esp_err_t app_wifi_start(void)
         ESP_LOGW(TAG, "mdns_init failed - the device will only be reachable by IP address");
     }
 
-    ESP_ERROR_CHECK(esp_wifi_start());
-
+    /* Read the AP's (static, self-assigned) IP and arm the captive-portal
+     * DNS server *before* esp_wifi_start() - not after - so there's no
+     * window where a fast STA connection's IP_EVENT_STA_GOT_IP (which calls
+     * dns_server_stop()) could race a not-yet-issued dns_server_start()
+     * call and leave the hijack running despite already being connected. */
     esp_netif_ip_info_t ap_ip;
     esp_netif_get_ip_info(s_ap_netif, &ap_ip);
-    dns_server_start(ap_ip.ip.addr);
+    s_ap_ip_addr = ap_ip.ip.addr;
+    dns_server_start(s_ap_ip_addr);
+
+    ESP_ERROR_CHECK(esp_wifi_start());
 
     ESP_LOGI(TAG, "SoftAP \"%s\" (%s) always available at " IPSTR,
              s_ap_ssid, ap_config.ap.authmode == WIFI_AUTH_OPEN ? "open, no password" : "password-protected",
