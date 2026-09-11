@@ -1,0 +1,62 @@
+name: Publish release
+
+# Triggered by pushing a version tag (e.g. `v1.2.0`) - see README
+# "Cutting a release". Builds firmware.bin and publishes it as a GitHub
+# Release with auto-generated notes (from merged PRs / commits since the
+# previous tag), ready for the web UI's "Check GitHub releases" feature.
+on:
+  push:
+    tags:
+      - "v*.*.*"
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    container:
+      image: espressif/idf:release-v6.1
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Check tag matches version.txt
+        shell: bash
+        run: |
+          tag_version="${GITHUB_REF_NAME#v}"
+          file_version="$(tr -d '[:space:]' < version.txt)"
+          if [ "$tag_version" != "$file_version" ]; then
+            echo "::error::Tag $GITHUB_REF_NAME (v$tag_version) does not match version.txt ($file_version) - bump version.txt and commit it before tagging."
+            exit 1
+          fi
+
+      - name: Build firmware (esp32s3)
+        shell: bash
+        run: |
+          . "$IDF_PATH/export.sh"
+          idf.py set-target esp32s3
+          idf.py build
+
+      - name: Prepare release assets
+        shell: bash
+        run: |
+          mkdir -p release
+          # "firmware.bin" is the exact name components/app_ota looks for
+          # when checking GitHub releases for an update.
+          cp build/wt32_smalltv.bin release/firmware.bin
+          cp build/bootloader/bootloader.bin release/bootloader.bin
+          cp build/partition_table/partition-table.bin release/partition-table.bin
+          cp build/ota_data_initial.bin release/ota_data_initial.bin
+          cp build/flasher_args.json release/flasher_args.json
+
+      - name: Publish GitHub release
+        uses: softprops/action-gh-release@v2
+        with:
+          generate_release_notes: true
+          files: |
+            release/firmware.bin
+            release/bootloader.bin
+            release/partition-table.bin
+            release/ota_data_initial.bin
+            release/flasher_args.json

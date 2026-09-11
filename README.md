@@ -146,6 +146,31 @@ through the same on-device validation:
    bootloader automatically reverts to the previous working image on the
    next boot.
 
+### Cutting a release
+
+[`.github/workflows/release.yml`](.github/workflows/release.yml) publishes a
+GitHub Release automatically - with auto-generated release notes (from the
+merged PRs/commits since the last tag) and a ready-to-use `firmware.bin`
+attached - whenever a tag matching `vX.Y.Z` is pushed:
+
+```sh
+# 1. Bump the version and commit it
+echo "1.1.0" > version.txt
+git commit -am "Bump version to 1.1.0"
+git push
+
+# 2. Tag it (must match version.txt, or the workflow fails on purpose)
+git tag v1.1.0
+git push origin v1.1.0
+```
+
+The release also gets `bootloader.bin`, `partition-table.bin`,
+`ota_data_initial.bin` and `flasher_args.json` attached, for anyone flashing
+a blank board over serial instead of using the web UI.
+[`.github/workflows/build.yml`](.github/workflows/build.yml) is a separate,
+simpler workflow that just builds (no release) on every push to `main` and
+every PR, to catch a broken build before it gets that far.
+
 The partition table (`partitions.csv`) uses the standard `otadata` +
 `ota_0`/`ota_1` dual-app-slot layout (no `factory` partition), so a plain
 `idf.py -p <PORT> flash` still works for the very first flash over serial.

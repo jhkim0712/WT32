@@ -141,6 +141,32 @@ microSD 카드 루트에 `photos/` 폴더를 만들고 `.bmp`(24비트 무압축
 이중 앱 슬롯 구조를 사용합니다(`factory` 파티션 없음). 따라서 최초 1회
 시리얼로 `idf.py -p <PORT> flash` 하는 것도 그대로 동작합니다.
 
+### 릴리즈 만들기
+
+`vX.Y.Z` 형식의 태그를 push하면
+[`.github/workflows/release.yml`](.github/workflows/release.yml)이 자동으로
+GitHub Release를 게시합니다 — 마지막 태그 이후 머지된 PR/커밋을 바탕으로
+릴리즈 노트를 자동 생성하고, 바로 쓸 수 있는 `firmware.bin`을 첨부합니다:
+
+```sh
+# 1. 버전을 올리고 커밋
+echo "1.1.0" > version.txt
+git commit -am "Bump version to 1.1.0"
+git push
+
+# 2. 태그 push (version.txt와 반드시 일치해야 하며, 다르면 워크플로우가
+#    일부러 실패합니다)
+git tag v1.1.0
+git push origin v1.1.0
+```
+
+릴리즈에는 시리얼로 새 보드를 처음부터 굽는 사람들을 위해
+`bootloader.bin`, `partition-table.bin`, `ota_data_initial.bin`,
+`flasher_args.json` 도 함께 첨부됩니다.
+[`.github/workflows/build.yml`](.github/workflows/build.yml)은 이와 별개로,
+`main`에 push되거나 PR이 생성될 때마다 빌드만(릴리즈 없이) 수행해서 문제를
+더 일찍 잡아내는 단순한 워크플로우입니다.
+
 ## 프로젝트 구조
 
 ```
