@@ -252,7 +252,7 @@ static esp_err_t config_post_handler(httpd_req_t *req)
 }
 
 /* ---------------------------------------------------------------------- */
-/* /api/wifi/*                                                             */
+/* /api/wifi/... routes                                                   */
 /* ---------------------------------------------------------------------- */
 
 static esp_err_t wifi_scan_get_handler(httpd_req_t *req)
@@ -316,7 +316,7 @@ static esp_err_t wifi_connect_post_handler(httpd_req_t *req)
 }
 
 /* ---------------------------------------------------------------------- */
-/* /api/system/*                                                          */
+/* /api/system/... routes                                                 */
 /* ---------------------------------------------------------------------- */
 
 static esp_err_t restart_post_handler(httpd_req_t *req)
@@ -335,7 +335,7 @@ static esp_err_t factory_reset_post_handler(httpd_req_t *req)
 }
 
 /* ---------------------------------------------------------------------- */
-/* /api/ota/*  - firmware updates                                        */
+/* /api/ota/... routes - firmware updates                                 */
 /* ---------------------------------------------------------------------- */
 
 static esp_err_t send_json_error(httpd_req_t *req, const char *status, const char *error)
