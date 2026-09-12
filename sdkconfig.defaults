@@ -67,6 +67,10 @@ CONFIG_LV_FONT_MONTSERRAT_16=y
 CONFIG_LV_FONT_MONTSERRAT_24=y
 CONFIG_LV_FONT_MONTSERRAT_48=y
 CONFIG_LV_FONT_DEFAULT_MONTSERRAT_16=y
+# lv_font_conv compresses glyph bitmaps by default (see font_clock_80.c,
+# font_weather_icons_64.c) - needs this to actually decode them at draw
+# time, or the glyphs silently draw as nothing (label just looks empty).
+CONFIG_LV_USE_FONT_COMPRESSED=y
 
 #
 # Logging

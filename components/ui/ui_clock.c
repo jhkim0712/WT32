@@ -4,6 +4,10 @@
 #include "app_config.h"
 #include "app_time.h"
 
+/* Digits/colon/AM/PM only, at 80px (vs. the 48px built-in Montserrat) for
+ * better readability as a desk clock - see font_clock_80.c. */
+LV_FONT_DECLARE(font_clock_80);
+
 static lv_obj_t *s_time_label;
 static lv_obj_t *s_date_label;
 static lv_obj_t *s_status_label;
@@ -38,14 +42,14 @@ lv_obj_t *ui_clock_create(void)
     lv_obj_set_style_border_width(scr, 0, 0);
 
     s_time_label = lv_label_create(scr);
-    lv_obj_set_style_text_font(s_time_label, &lv_font_montserrat_48, 0);
+    lv_obj_set_style_text_font(s_time_label, &font_clock_80, 0);
     lv_obj_set_style_text_color(s_time_label, lv_color_hex(0x00e5ff), 0);
-    lv_obj_align(s_time_label, LV_ALIGN_CENTER, 0, -30);
+    lv_obj_align(s_time_label, LV_ALIGN_CENTER, 0, -70);
 
     s_date_label = lv_label_create(scr);
     lv_obj_set_style_text_font(s_date_label, &lv_font_montserrat_24, 0);
     lv_obj_set_style_text_color(s_date_label, lv_color_white(), 0);
-    lv_obj_align(s_date_label, LV_ALIGN_CENTER, 0, 30);
+    lv_obj_align(s_date_label, LV_ALIGN_CENTER, 0, 45);
 
     s_status_label = lv_label_create(scr);
     lv_obj_set_style_text_font(s_status_label, &lv_font_montserrat_14, 0);

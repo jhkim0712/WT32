@@ -2,6 +2,7 @@ idf_component_register(
     SRCS
         "ui.c"
         "ui_clock.c"
+        "font_clock_80.c"
         "ui_album.c"
         "ui_weather.c"
         "ui_weather_icons.c"
