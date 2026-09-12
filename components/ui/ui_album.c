@@ -16,10 +16,13 @@
  */
 #include <stdio.h>
 #include <stdlib.h>
+#include "esp_log.h"
 #include "ui_internal.h"
 #include "app_photo.h"
 #include "app_config.h"
 #include "bsp/bsp_pins.h"
+
+static const char *TAG = "ui_album";
 
 static lv_obj_t *s_scr;
 static lv_obj_t *s_img;
@@ -107,6 +110,25 @@ static void show_index(size_t idx)
         static char gif_src[APP_PHOTO_PATH_MAX + 2];
         snprintf(gif_src, sizeof(gif_src), "S:%s", path);
         lv_gif_set_src(s_gif, gif_src);
+
+        if (!lv_gif_is_loaded(s_gif)) {
+            /* LVGL bug/rough edge (managed_components/lvgl__lvgl's
+             * lv_gif.c): when switching away from an already-open gif,
+             * lv_gif_set_src() unconditionally resumes the animation timer
+             * for the *new* one before it's known whether that new one
+             * will actually load - if it doesn't (bad file, or - the
+             * likely case here given how tight PSRAM already is - its own
+             * decode buffer failing to allocate), the timer is left
+             * running against a NULL draw buffer, and the very next tick
+             * crashes (LoadProhibited in gif_disposal_last_frame). Not
+             * something we can fix at the source without patching a
+             * managed component, but cheap to guard against here. */
+            ESP_LOGW(TAG, "Failed to load GIF %s (bad file, or out of PSRAM for its frame buffer)", path);
+            lv_gif_pause(s_gif);
+            lv_obj_add_flag(s_gif, LV_OBJ_FLAG_HIDDEN);
+            return;
+        }
+
         lv_obj_center(s_gif);
         lv_obj_clear_flag(s_gif, LV_OBJ_FLAG_HIDDEN);
         lv_obj_add_flag(s_empty_label, LV_OBJ_FLAG_HIDDEN);
@@ -215,6 +237,13 @@ lv_obj_t *ui_album_create(void)
      * its default (content) size instead of BSP_LCD_H_RES/V_RES, per the
      * file comment, so it auto-sizes to each GIF's native resolution. */
     s_gif = lv_gif_create(scr);
+    /* Must be set before the first lv_gif_set_src() (per its own doc
+     * comment) or it just triggers an extra reallocation later. Halves the
+     * GIF's own internal draw buffer vs. the ARGB8888 default (4 bytes/px);
+     * PSRAM is tight enough on this board that this matters, and we have
+     * no use for per-frame alpha anyway - the album always fills the
+     * screen behind it either way. */
+    lv_gif_set_color_format(s_gif, LV_COLOR_FORMAT_RGB565);
     lv_obj_add_flag(s_gif, LV_OBJ_FLAG_HIDDEN);
     lv_obj_add_flag(s_gif, LV_OBJ_FLAG_CLICKABLE);
     lv_obj_add_flag(s_gif, LV_OBJ_FLAG_GESTURE_BUBBLE);
