@@ -86,6 +86,14 @@ lv_obj_t *ui_album_create(void)
     lv_obj_center(s_img);
     lv_obj_add_flag(s_img, LV_OBJ_FLAG_HIDDEN);
     lv_obj_add_flag(s_img, LV_OBJ_FLAG_CLICKABLE);
+    /* s_img covers virtually the whole screen, so it's what actually gets
+     * hit-tested at touch-down - without this, LVGL delivers LV_EVENT_GESTURE
+     * to s_img itself (which has no gesture handler) instead of bubbling it
+     * up to the screen's LV_EVENT_GESTURE callback (see ui.c), so swiping to
+     * switch screens silently did nothing while a finger started on the
+     * photo; tapping to advance still worked since that's LV_EVENT_CLICKED,
+     * a separate mechanism. */
+    lv_obj_add_flag(s_img, LV_OBJ_FLAG_GESTURE_BUBBLE);
     lv_obj_add_event_cb(s_img, tap_cb, LV_EVENT_CLICKED, NULL);
 
     s_empty_label = lv_label_create(scr);
