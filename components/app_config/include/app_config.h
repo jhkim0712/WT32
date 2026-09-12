@@ -57,6 +57,11 @@ typedef struct {
     uint16_t album_interval_s;
     bool     album_shuffle;
 
+    /* --- Weather (OpenWeatherMap) --- */
+    bool     weather_enabled;
+    char     weather_api_key[APP_CFG_STR_MAX_LEN];  /* OpenWeatherMap API key */
+    char     weather_city_id[APP_CFG_STR_MAX_LEN];  /* OpenWeatherMap numeric city/region ID */
+
     /* --- Audio --- */
     bool     audio_muted;
 

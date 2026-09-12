@@ -9,6 +9,7 @@ idf_component_register(
         app_time
         app_web
         app_photo
+        app_weather
         app_ota
         ui
 )

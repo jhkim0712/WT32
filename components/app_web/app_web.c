@@ -21,9 +21,11 @@
 #include "app_wifi.h"
 #include "app_time.h"
 #include "app_photo.h"
+#include "app_weather.h"
 #include "app_ota.h"
 #include "app_files.h"
 #include "bsp/bsp_board.h"
+#include "bsp/bsp_pins.h" /* BSP_SD_MOUNT_POINT */
 
 static const char *TAG = "app_web";
 
@@ -210,6 +212,9 @@ static esp_err_t config_get_handler(httpd_req_t *req)
     cJSON_AddNumberToObject(root, "cycle_seconds", cfg->cycle_seconds);
     cJSON_AddNumberToObject(root, "album_interval_s", cfg->album_interval_s);
     cJSON_AddBoolToObject(root, "album_shuffle", cfg->album_shuffle);
+    cJSON_AddBoolToObject(root, "weather_enabled", cfg->weather_enabled);
+    cJSON_AddStringToObject(root, "weather_api_key", cfg->weather_api_key);
+    cJSON_AddStringToObject(root, "weather_city_id", cfg->weather_city_id);
     cJSON_AddBoolToObject(root, "audio_muted", cfg->audio_muted);
     cJSON_AddStringToObject(root, "github_repo", cfg->github_repo);
 
@@ -275,6 +280,18 @@ static esp_err_t config_post_handler(httpd_req_t *req)
             app_photo_unshuffle();
         }
     }
+    if ((item = cJSON_GetObjectItem(root, "weather_enabled")) && cJSON_IsBool(item)) {
+        cfg->weather_enabled = cJSON_IsTrue(item);
+        app_weather_request_refresh();
+    }
+    if ((item = cJSON_GetObjectItem(root, "weather_api_key")) && cJSON_IsString(item)) {
+        strncpy(cfg->weather_api_key, item->valuestring, sizeof(cfg->weather_api_key) - 1);
+        app_weather_request_refresh();
+    }
+    if ((item = cJSON_GetObjectItem(root, "weather_city_id")) && cJSON_IsString(item)) {
+        strncpy(cfg->weather_city_id, item->valuestring, sizeof(cfg->weather_city_id) - 1);
+        app_weather_request_refresh();
+    }
     if ((item = cJSON_GetObjectItem(root, "audio_muted")) && cJSON_IsBool(item)) {
         cfg->audio_muted = cJSON_IsTrue(item);
         bsp_audio_set_mute(cfg->audio_muted);
@@ -287,6 +304,35 @@ static esp_err_t config_post_handler(httpd_req_t *req)
     app_config_save();
     ESP_LOGI(TAG, "Config updated via web UI");
     return send_ok(req);
+}
+
+/* ---------------------------------------------------------------------- */
+/* /api/weather                                                            */
+/* ---------------------------------------------------------------------- */
+
+static esp_err_t weather_get_handler(httpd_req_t *req)
+{
+    app_config_t *cfg = app_config_get();
+    app_weather_data_t w;
+    app_weather_get(&w);
+
+    cJSON *root = cJSON_CreateObject();
+    cJSON_AddBoolToObject(root, "enabled", cfg->weather_enabled);
+    cJSON_AddBoolToObject(root, "configured", cfg->weather_api_key[0] && cfg->weather_city_id[0]);
+    cJSON_AddBoolToObject(root, "valid", w.valid);
+    cJSON_AddBoolToObject(root, "have_error", w.have_error);
+    cJSON_AddStringToObject(root, "error", w.error);
+    cJSON_AddStringToObject(root, "description", w.description);
+    cJSON_AddStringToObject(root, "city_name", w.city_name);
+    cJSON_AddNumberToObject(root, "temp_c", w.temp_c);
+    cJSON_AddNumberToObject(root, "feels_like_c", w.feels_like_c);
+    cJSON_AddNumberToObject(root, "temp_min_c", w.temp_min_c);
+    cJSON_AddNumberToObject(root, "temp_max_c", w.temp_max_c);
+    cJSON_AddNumberToObject(root, "humidity_pct", w.humidity_pct);
+    cJSON_AddNumberToObject(root, "wind_speed_ms", w.wind_speed_ms);
+    cJSON_AddNumberToObject(root, "updated_at", (double)w.updated_at);
+
+    return send_json(req, root);
 }
 
 /* ---------------------------------------------------------------------- */
@@ -797,6 +843,27 @@ static esp_err_t files_mkdir_post_handler(httpd_req_t *req)
 }
 
 /* ---------------------------------------------------------------------- */
+/* /api/sdcard/... routes                                                 */
+/* ---------------------------------------------------------------------- */
+
+static esp_err_t sdcard_format_post_handler(httpd_req_t *req)
+{
+    if (!bsp_sdcard_is_mounted()) {
+        return send_json_error(req, "400 Bad Request", "not_mounted");
+    }
+    if (bsp_sdcard_format() != ESP_OK) {
+        return send_json_error(req, "500 Internal Server Error", "format_failed");
+    }
+    /* The format just wiped /photos along with everything else - recreate it
+     * (best-effort: a failure here just means the next photo upload has to
+     * create the folder itself) and reset the in-memory album list, which
+     * otherwise still points at files that no longer exist. */
+    app_files_mkdir("/photos");
+    app_photo_scan(BSP_SD_MOUNT_POINT "/photos");
+    return send_ok(req);
+}
+
+/* ---------------------------------------------------------------------- */
 /* Captive portal: redirect anything unrecognized back to "/"              */
 /* ---------------------------------------------------------------------- */
 
@@ -813,7 +880,7 @@ static esp_err_t captive_redirect_handler(httpd_req_t *req, httpd_err_code_t err
 esp_err_t app_web_start(void)
 {
     httpd_config_t config = HTTPD_DEFAULT_CONFIG();
-    config.max_uri_handlers = 24;
+    config.max_uri_handlers = 28; /* routes[] below is at 23 - keep a few spare */
     config.lru_purge_enable = true;
     config.uri_match_fn = httpd_uri_match_wildcard;
     config.stack_size = 8192; /* OTA writes + JSON parsing want a bit more than the 4KB default */
@@ -832,6 +899,7 @@ esp_err_t app_web_start(void)
         {.uri = "/api/status",                .method = HTTP_GET,  .handler = status_get_handler},
         {.uri = "/api/config",                .method = HTTP_GET,  .handler = config_get_handler},
         {.uri = "/api/config",                .method = HTTP_POST, .handler = config_post_handler},
+        {.uri = "/api/weather",               .method = HTTP_GET,  .handler = weather_get_handler},
         {.uri = "/api/wifi/scan",             .method = HTTP_GET,  .handler = wifi_scan_get_handler},
         {.uri = "/api/wifi/connect",          .method = HTTP_POST, .handler = wifi_connect_post_handler},
         {.uri = "/api/system/restart",        .method = HTTP_POST, .handler = restart_post_handler},
@@ -847,6 +915,7 @@ esp_err_t app_web_start(void)
         {.uri = "/api/files/delete",          .method = HTTP_POST, .handler = files_delete_post_handler},
         {.uri = "/api/files/rename",          .method = HTTP_POST, .handler = files_rename_post_handler},
         {.uri = "/api/files/mkdir",           .method = HTTP_POST, .handler = files_mkdir_post_handler},
+        {.uri = "/api/sdcard/format",         .method = HTTP_POST, .handler = sdcard_format_post_handler},
     };
     for (size_t i = 0; i < sizeof(routes) / sizeof(routes[0]); i++) {
         httpd_register_uri_handler(server, &routes[i]);

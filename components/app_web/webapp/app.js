@@ -105,13 +105,99 @@
     }
   });
 
+  /* ---- Timezone: plain UTC offset picker instead of a raw POSIX string ----
+   * POSIX TZ offsets are inverted from how everyone actually says them
+   * (UTC+9 is written "UTC-9" in a POSIX TZ string) - that's the "correction"
+   * done here so the person picking a timezone never has to know that. No
+   * DST rules are applied for these plain-offset entries; pick "Custom" for
+   * a POSIX rule that handles DST on its own (e.g. US/EU presets below). */
+  var TZ_CUSTOM = "__custom__";
+  var TZ_PRESETS = [
+    ["UTC12",     "UTC−12:00 — Baker Island"],
+    ["UTC11",     "UTC−11:00 — Midway, Samoa"],
+    ["UTC10",     "UTC−10:00 — Hawaii"],
+    ["UTC9:30",   "UTC−09:30 — Marquesas Islands"],
+    ["UTC9",      "UTC−09:00 — Alaska"],
+    ["UTC8",      "UTC−08:00 — Pacific Time (US)"],
+    ["UTC7",      "UTC−07:00 — Mountain Time (US)"],
+    ["UTC6",      "UTC−06:00 — Central Time (US), Mexico City"],
+    ["UTC5",      "UTC−05:00 — Eastern Time (US), Bogotá"],
+    ["UTC4:30",   "UTC−04:30 — Caracas (pre-2016)"],
+    ["UTC4",      "UTC−04:00 — Atlantic Time, Santiago"],
+    ["UTC3:30",   "UTC−03:30 — Newfoundland"],
+    ["UTC3",      "UTC−03:00 — Argentina, São Paulo"],
+    ["UTC2",      "UTC−02:00 — Mid-Atlantic"],
+    ["UTC1",      "UTC−01:00 — Azores"],
+    ["UTC0",      "UTC±00:00 — London, Lisbon"],
+    ["UTC-1",     "UTC+01:00 — Berlin, Paris, Lagos"],
+    ["UTC-2",     "UTC+02:00 — Cairo, Athens, Johannesburg"],
+    ["UTC-3",     "UTC+03:00 — Moscow, Riyadh, Nairobi"],
+    ["UTC-3:30",  "UTC+03:30 — Tehran"],
+    ["UTC-4",     "UTC+04:00 — Dubai, Baku"],
+    ["UTC-4:30",  "UTC+04:30 — Kabul"],
+    ["UTC-5",     "UTC+05:00 — Karachi, Tashkent"],
+    ["UTC-5:30",  "UTC+05:30 — India, Sri Lanka"],
+    ["UTC-5:45",  "UTC+05:45 — Nepal"],
+    ["UTC-6",     "UTC+06:00 — Dhaka, Almaty"],
+    ["UTC-6:30",  "UTC+06:30 — Yangon"],
+    ["UTC-7",     "UTC+07:00 — Bangkok, Jakarta"],
+    ["UTC-8",     "UTC+08:00 — Beijing, Singapore, Perth"],
+    ["UTC-8:45",  "UTC+08:45 — Eucla"],
+    ["UTC-9",     "UTC+09:00 — Seoul, Tokyo"],
+    ["UTC-9:30",  "UTC+09:30 — Adelaide, Darwin"],
+    ["UTC-10",    "UTC+10:00 — Sydney, Brisbane"],
+    ["UTC-10:30", "UTC+10:30 — Lord Howe Island"],
+    ["UTC-11",    "UTC+11:00 — Solomon Islands"],
+    ["UTC-12",    "UTC+12:00 — Auckland, Fiji"],
+    ["UTC-12:45", "UTC+12:45 — Chatham Islands"],
+    ["UTC-13",    "UTC+13:00 — Tonga, Apia"],
+    ["UTC-14",    "UTC+14:00 — Kiritimati"],
+    ["PST8PDT,M3.2.0,M11.1.0",       "US Pacific (auto DST)"],
+    ["MST7MDT,M3.2.0,M11.1.0",       "US Mountain (auto DST)"],
+    ["CST6CDT,M3.2.0,M11.1.0",       "US Central (auto DST)"],
+    ["EST5EDT,M3.2.0,M11.1.0",       "US Eastern (auto DST)"],
+    ["CET-1CEST,M3.5.0,M10.5.0/3",   "Central Europe (auto DST)"],
+    ["GMT0BST,M3.5.0/1,M10.5.0",     "UK (auto DST)"],
+  ];
+
+  function buildTzOptions() {
+    var sel = $("tzOffset");
+    TZ_PRESETS.forEach(function (entry) {
+      var opt = document.createElement("option");
+      opt.value = entry[0];
+      opt.textContent = entry[1];
+      sel.appendChild(opt);
+    });
+    var customOpt = document.createElement("option");
+    customOpt.value = TZ_CUSTOM;
+    customOpt.textContent = "Custom (advanced POSIX TZ string)…";
+    sel.appendChild(customOpt);
+  }
+  buildTzOptions();
+
+  function setTzFromConfig(tzPosix) {
+    var known = TZ_PRESETS.some(function (entry) { return entry[0] === tzPosix; });
+    if (known) {
+      $("tzOffset").value = tzPosix;
+      $("tzCustomRow").hidden = true;
+    } else {
+      $("tzOffset").value = TZ_CUSTOM;
+      $("tzCustom").value = tzPosix || "";
+      $("tzCustomRow").hidden = false;
+    }
+  }
+
+  $("tzOffset").addEventListener("change", function () {
+    $("tzCustomRow").hidden = this.value !== TZ_CUSTOM;
+  });
+
   /* ---- Config-backed forms ---- */
   let currentConfig = {};
 
   async function loadConfig() {
     currentConfig = await api("/api/config");
     $("wifiCurrentSsid").textContent = currentConfig.wifi_ssid || "(not set)";
-    $("tz").value = currentConfig.tz_posix || "";
+    setTzFromConfig(currentConfig.tz_posix);
     $("ntp").value = currentConfig.ntp_server || "";
     $("time24h").checked = !!currentConfig.time_24h;
     $("chime").checked = !!currentConfig.chime_enabled;
@@ -122,6 +208,9 @@
     $("audioMuted").checked = !!currentConfig.audio_muted;
     $("albumInterval").value = currentConfig.album_interval_s;
     $("albumShuffle").checked = !!currentConfig.album_shuffle;
+    $("weatherEnabled").checked = !!currentConfig.weather_enabled;
+    $("weatherApiKey").value = currentConfig.weather_api_key || "";
+    $("weatherCityId").value = currentConfig.weather_city_id || "";
     $("hostname").value = currentConfig.hostname || "";
     $("githubRepo").value = currentConfig.github_repo || "";
   }
@@ -140,8 +229,10 @@
   });
 
   $("btnSaveClock").addEventListener("click", function () {
+    var tzSelected = $("tzOffset").value;
+    var tzPosix = tzSelected === TZ_CUSTOM ? $("tzCustom").value.trim() : tzSelected;
     saveConfig({
-      tz_posix: $("tz").value,
+      tz_posix: tzPosix,
       ntp_server: $("ntp").value,
       time_24h: $("time24h").checked,
       chime_enabled: $("chime").checked,
@@ -163,6 +254,40 @@
       album_shuffle: $("albumShuffle").checked,
     }, $("albumMsg"));
   });
+
+  $("btnSaveWeather").addEventListener("click", function () {
+    saveConfig({
+      weather_enabled: $("weatherEnabled").checked,
+      weather_api_key: $("weatherApiKey").value,
+      weather_city_id: $("weatherCityId").value,
+    }, $("weatherMsg"));
+    setTimeout(refreshWeatherStatus, 1000);
+  });
+
+  /* ---- Weather status preview ---- */
+  async function refreshWeatherStatus() {
+    try {
+      const w = await api("/api/weather");
+      if (!w.enabled) {
+        $("wxStatus").textContent = "Off";
+      } else if (!w.configured) {
+        $("wxStatus").textContent = "Missing API key / city ID";
+      } else if (w.valid) {
+        $("wxStatus").textContent = w.have_error ? "Stale (last fetch failed)" : "OK";
+      } else {
+        $("wxStatus").textContent = w.have_error ? ("Error: " + w.error) : "Waiting for first fetch...";
+      }
+      $("wxCity").textContent = w.city_name || "-";
+      $("wxTemp").textContent = w.valid ? Math.round(w.temp_c) + " °C (feels " + Math.round(w.feels_like_c) + " °C)" : "-";
+      $("wxDesc").textContent = w.description || "-";
+      $("wxHumidity").textContent = w.valid ? w.humidity_pct + "%" : "-";
+      $("wxWind").textContent = w.valid ? w.wind_speed_ms + " m/s" : "-";
+    } catch (e) {
+      $("wxStatus").textContent = "-";
+    }
+  }
+
+  document.querySelector('.tab[data-tab="weather"]').addEventListener("click", refreshWeatherStatus);
 
   $("btnSaveSystem").addEventListener("click", function () {
     saveConfig({ hostname: $("hostname").value }, $("systemMsg"));
@@ -517,6 +642,24 @@
       }
     } catch (e) {
       showMsg(msg, "Could not create folder", false);
+    }
+  });
+
+  $("btnSdFormat").addEventListener("click", async function () {
+    const msg = $("sdFormatMsg");
+    if (!confirm("This ERASES EVERYTHING on the SD card (all photos and files) and can't be undone. Continue?")) return;
+    if (!confirm("Really format the SD card? This is your last chance to cancel.")) return;
+    try {
+      const res = await api("/api/sdcard/format", "POST");
+      if (res.ok) {
+        showMsg(msg, "SD card formatted", true);
+        loadFiles("/");
+        refreshStatus();
+      } else {
+        showMsg(msg, "Format failed: " + (res.error || ""), false);
+      }
+    } catch (e) {
+      showMsg(msg, "Format failed (connection error)", false);
     }
   });
 

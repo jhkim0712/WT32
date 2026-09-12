@@ -3,9 +3,9 @@
 A small, self-hosted **desk clock / digital photo frame** firmware for the
 [WT32-SC01 Plus](docs/WT32-SC01-PLUS_Datasheet-V1.9+EN.pdf) (ESP32-S3 + 3.5"
 480x320 touch LCD), written in plain C on top of ESP-IDF and LVGL. Swipe
-between a clock, a photo slideshow from a microSD card, and a device-info
-screen, all configured from a phone or laptop through a built-in web page -
-no app, no cloud account.
+between a clock, a photo slideshow from a microSD card, a weather screen, and
+a device-info screen, all configured from a phone or laptop through a
+built-in web page - no app, no cloud account.
 
 > 한국어 안내는 [README.ko.md](README.ko.md) 를 참고하세요.
 
@@ -18,6 +18,12 @@ no app, no cloud account.
 - **Clock screen** - large digital time + date, auto-updated from SNTP.
 - **Photo album** - slideshow of `.bmp` / `.jpg` / `.png` images from a
   microSD card, swipe or tap to advance, configurable interval and shuffle.
+- **Weather screen** - current conditions from OpenWeatherMap (temperature,
+  description, humidity, wind), with a day/night condition icon from the
+  bundled [Weather Icons](https://github.com/erikflowers/weather-icons)
+  font. Shows the last known reading (marked stale) if a fetch fails, rather
+  than blanking on a transient network hiccup. Optional - stays hidden from
+  the swipe rotation until an API key and city ID are set.
 - **Device info screen** - IP address, Wi-Fi signal, SD card status, uptime,
   free heap, firmware version.
 - **Swipe navigation** between screens, plus an optional auto-cycle timer.
@@ -28,10 +34,12 @@ no app, no cloud account.
   - Timezone (POSIX TZ string), NTP server, 12h/24h format, hourly chime.
   - Brightness, auto-cycle, mute.
   - Photo album interval/shuffle.
+  - Weather: OpenWeatherMap API key + city ID, enable/disable the screen.
   - Hostname, restart, factory reset, fallback AP password.
   - **File manager**: browse, upload, download/view, rename and delete
     anything on the microSD card, right from the browser (no separate app
-    needed to load photos onto it).
+    needed to load photos onto it) - plus a one-click **format** to fully
+    erase and reformat the card if it needs wiping.
   - **Firmware updates**: upload a `.bin` file directly, or check a GitHub
     repo's releases and install with one click - see [Firmware updates](#firmware-updates).
 - Reachable by IP or via mDNS (`http://<hostname>.local/`, default
@@ -218,9 +226,12 @@ components/
   app_wifi/            SoftAP + STA Wi-Fi manager, captive-portal DNS, mDNS
   app_time/            timezone + SNTP
   app_photo/           SD card scan + BMP/JPEG decode + resize
+  app_weather/         OpenWeatherMap current-conditions polling
   app_web/             REST API + embedded HTML5/CSS/JS config page
   app_ota/             manual/GitHub firmware updates + identity validation
-  ui/                  LVGL screens (clock / album / info) + navigation
+  ui/                  LVGL screens (clock / album / weather / info) +
+                       navigation; weather condition icons are a bitmap font
+                       generated (lv_font_conv) from Weather Icons
 ```
 
 ## Known limitations / roadmap
@@ -240,8 +251,8 @@ components/
   literally named `firmware.bin` first, else the first `.bin` it finds; if
   your release has multiple boards' binaries, name them so `firmware.bin`
   is the right one (or rename the asset per-repo).
-- Ideas welcome: weather screen, MP3/audio playback from SD, alarms, more
-  clock faces, GIF playback.
+- Ideas welcome: MP3/audio playback from SD, alarms, more clock faces, GIF
+  playback.
 
 ## Security note
 
@@ -262,4 +273,8 @@ don't trust everyone on.
 
 MIT - see [LICENSE](LICENSE). Vendor datasheets under `docs/` remain the
 property of Wireless-Tag Technology Co., Limited and are included for
-reference only.
+reference only. The weather condition icons are a small, converted subset of
+Erik Flowers' [Weather Icons](https://github.com/erikflowers/weather-icons)
+font (SIL OFL 1.1) - see
+[`components/ui/ui_weather_icons.c`](components/ui/ui_weather_icons.c) for
+exactly which glyphs and how they were converted.

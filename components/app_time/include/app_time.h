@@ -25,7 +25,14 @@ void app_time_set_timezone(const char *tz_posix);
 /** Restart SNTP against a (possibly new) server, e.g. after a config change. */
 void app_time_set_server(const char *ntp_server);
 
-/** @return true once at least one successful SNTP sync has completed. */
+/**
+ * @return true once at least one successful SNTP sync has completed.
+ *
+ * Stays true afterwards (including across the periodic background resyncs
+ * SNTP keeps doing every ~1h) - this is a latch, not a live "currently
+ * mid-sync" status, so it's safe to poll from UI code without it flapping
+ * back to false between resyncs.
+ */
 bool app_time_is_synced(void);
 
 /** Fill @p out with the current local (timezone-adjusted) time. */
