@@ -220,6 +220,11 @@ git push origin v1.1.0
   래치합니다).
 - **모양은 맞는데 색이 반전/이상함** - `esp_lcd_panel_invert_color(panel_handle, true)`
   의 `true`를 뒤집어 보세요.
+- **전체가 반전되는 게 아니라 특정 색상이 다른 색으로 바뀜** (예: 시계의
+  사이언이 노란색으로 보임) - 이건 반전이 아니라 R/B 채널이 뒤바뀐
+  것입니다. `rgb_ele_order`를 `LCD_RGB_ELEMENT_ORDER_RGB`와
+  `LCD_RGB_ELEMENT_ORDER_BGR` 사이에서 바꿔보세요 (패널 로트에 따라 유리
+  배선이 반대인 경우가 있습니다).
 - **화면이 좌우/상하로 뒤집히거나 밀려 보임** - 바로 아래 있는
   `esp_lcd_panel_swap_xy()` / `esp_lcd_panel_mirror()` 호출을 조정하세요.
 - **백라이트는 켜지는데 아무것도 안 그려짐** - 디스플레이 튜닝 문제가
