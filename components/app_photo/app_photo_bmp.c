@@ -9,6 +9,7 @@
 #include <stdlib.h>
 #include <stdbool.h>
 #include "esp_log.h"
+#include "esp_heap_caps.h"
 
 #include "app_photo_internal.h"
 
@@ -75,7 +76,11 @@ esp_err_t app_photo_bmp_decode_native(const char *path, uint16_t **out_buf, uint
         return ESP_ERR_NO_MEM;
     }
 
-    uint16_t *buf = malloc((size_t)width * height * sizeof(uint16_t));
+    /* The decoded buffer scales with image size and can reach into the
+     * megabytes - PSRAM has room for that, the ~400KB of internal DRAM left
+     * over after LVGL/Wi-Fi/lwIP does not, so ask for it explicitly rather
+     * than let the general allocator pick. */
+    uint16_t *buf = heap_caps_malloc((size_t)width * height * sizeof(uint16_t), MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT);
     if (!buf) {
         fclose(f);
         return ESP_ERR_NO_MEM;
@@ -83,7 +88,7 @@ esp_err_t app_photo_bmp_decode_native(const char *path, uint16_t **out_buf, uint
 
     int row_bytes = width * 3;
     int row_padded = (row_bytes + 3) & ~3;
-    uint8_t *row = malloc(row_padded);
+    uint8_t *row = malloc(row_padded); /* one scanline, a few KB at most - fine in internal RAM */
     if (!row) {
         free(buf);
         fclose(f);

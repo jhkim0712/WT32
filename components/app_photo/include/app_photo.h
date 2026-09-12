@@ -11,9 +11,17 @@
  * nearest-neighbor scaled to exactly fill the requested canvas (typically
  * the panel's 480x320 resolution). PNG transparency is ignored (flattened
  * to opaque) since photos are shown full-screen with nothing behind them.
+ *
+ * .gif is also recognized by app_photo_scan()/is included in the count and
+ * playback order, but it does NOT go through app_photo_decode_to_canvas() -
+ * animated GIFs play through LVGL's own lv_gif widget instead (see
+ * app_photo_is_gif() and ui_album.c), a completely different, path-based
+ * pipeline that shows them at native size rather than scaled to fill the
+ * screen like the other formats.
  */
 #pragma once
 
+#include <stdbool.h>
 #include <stddef.h>
 #include <stdint.h>
 #include "esp_err.h"
@@ -46,6 +54,9 @@ void app_photo_unshuffle(void);
  *                the caller owns it and must free() it.
  */
 esp_err_t app_photo_decode_to_canvas(size_t index, uint16_t canvas_w, uint16_t canvas_h, uint16_t **out_buf);
+
+/** @return true if @p path has a .gif extension - see the file comment. */
+bool app_photo_is_gif(const char *path);
 
 #ifdef __cplusplus
 }

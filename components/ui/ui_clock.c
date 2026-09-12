@@ -8,13 +8,31 @@
  * better readability as a desk clock - see font_clock_80.c. */
 LV_FONT_DECLARE(font_clock_80);
 
+static lv_obj_t *s_scr;
 static lv_obj_t *s_time_label;
 static lv_obj_t *s_date_label;
 static lv_obj_t *s_status_label;
+static bool s_theme_dark = true; /* sentinel matching the initial style below; forces the first apply_theme() to run */
+
+static void apply_theme(void)
+{
+    bool dark = ui_theme_is_dark();
+    if (dark == s_theme_dark) {
+        return;
+    }
+    s_theme_dark = dark;
+
+    lv_obj_set_style_bg_color(s_scr, ui_theme_color(0x0b0f1a, 0xf4f6fa), 0);
+    lv_obj_set_style_text_color(s_time_label, ui_theme_color(0x00e5ff, 0x0086a8), 0);
+    lv_obj_set_style_text_color(s_date_label, ui_theme_color(0xffffff, 0x1c1f26), 0);
+    lv_obj_set_style_text_color(s_status_label, ui_theme_color(0xffb300, 0xa66a00), 0);
+}
 
 static void update_cb(lv_timer_t *t)
 {
     (void)t;
+    apply_theme();
+
     struct tm now;
     app_time_get_local(&now);
     app_config_t *cfg = app_config_get();
@@ -37,6 +55,9 @@ static void update_cb(lv_timer_t *t)
 lv_obj_t *ui_clock_create(void)
 {
     lv_obj_t *scr = lv_obj_create(NULL);
+    s_scr = scr;
+    /* Dark-theme colors, matching s_theme_dark's initial value above - see
+     * apply_theme(), which takes over from here once the theme is resolved. */
     lv_obj_set_style_bg_color(scr, lv_color_hex(0x0b0f1a), 0);
     lv_obj_set_style_bg_opa(scr, LV_OPA_COVER, 0);
     lv_obj_set_style_border_width(scr, 0, 0);

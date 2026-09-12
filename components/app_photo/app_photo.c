@@ -32,7 +32,12 @@ static bool has_extension(const char *name, const char *ext)
 static bool is_supported_image(const char *name)
 {
     return has_extension(name, ".bmp") || has_extension(name, ".jpg") || has_extension(name, ".jpeg") ||
-           has_extension(name, ".png");
+           has_extension(name, ".png") || has_extension(name, ".gif");
+}
+
+bool app_photo_is_gif(const char *path)
+{
+    return has_extension(path, ".gif");
 }
 
 esp_err_t app_photo_scan(const char *dir_path)
@@ -98,18 +103,18 @@ void app_photo_shuffle(void)
     if (s_count < 2) {
         return;
     }
-    for (size_t i = s_count - 1; i > 0; i--) {
-        size_t j = esp_random() % (i + 1);
-        size_t tmp = s_order[i];
-        s_order[i] = s_order[j];
-        s_order[j] = tmp;
+    for (size_t shuffle_i = s_count - 1; shuffle_i > 0; shuffle_i--) {
+        size_t swap_j = esp_random() % (shuffle_i + 1);
+        size_t tmp = s_order[shuffle_i];
+        s_order[shuffle_i] = s_order[swap_j];
+        s_order[swap_j] = tmp;
     }
 }
 
 void app_photo_unshuffle(void)
 {
-    for (size_t i = 0; i < s_count; i++) {
-        s_order[i] = i;
+    for (size_t idx = 0; idx < s_count; idx++) {
+        s_order[idx] = idx;
     }
 }
 

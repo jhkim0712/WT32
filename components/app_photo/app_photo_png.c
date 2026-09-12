@@ -14,6 +14,7 @@
 #include <string.h>
 #include <png.h>
 #include "esp_log.h"
+#include "esp_heap_caps.h"
 
 #include "app_photo_internal.h"
 
@@ -43,7 +44,11 @@ esp_err_t app_photo_png_decode_native(const char *path, uint16_t **out_buf, uint
         return ESP_ERR_NO_MEM;
     }
 
-    png_bytep rgba = malloc(rgba_size);
+    /* Decode buffers scale with image size and can reach into the megabytes
+     * (rgba_size especially, at 4 bytes/px) - PSRAM has room for that, the
+     * ~400KB of internal DRAM left over after LVGL/Wi-Fi/lwIP does not, so
+     * ask for it explicitly rather than let the general allocator pick. */
+    png_bytep rgba = heap_caps_malloc(rgba_size, MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT);
     if (!rgba) {
         png_image_free(&image);
         return ESP_ERR_NO_MEM;
@@ -68,7 +73,7 @@ esp_err_t app_photo_png_decode_native(const char *path, uint16_t **out_buf, uint
         return ESP_ERR_NO_MEM;
     }
 
-    uint16_t *pixels = malloc(rgb565_size);
+    uint16_t *pixels = heap_caps_malloc(rgb565_size, MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT);
     if (!pixels) {
         free(rgba);
         return ESP_ERR_NO_MEM;
@@ -76,11 +81,11 @@ esp_err_t app_photo_png_decode_native(const char *path, uint16_t **out_buf, uint
 
     /* RGBA8888 -> RGB565, dropping alpha (photos are shown opaque/full-screen,
      * so there's no backdrop to composite semi-transparent pixels against). */
-    for (size_t i = 0; i < (size_t)width * height; i++) {
-        uint8_t r = rgba[i * 4 + 0];
-        uint8_t g = rgba[i * 4 + 1];
-        uint8_t b = rgba[i * 4 + 2];
-        pixels[i] = (uint16_t)(((r & 0xF8) << 8) | ((g & 0xFC) << 3) | (b >> 3));
+    for (size_t pixel_i = 0; pixel_i < (size_t)width * height; pixel_i++) {
+        uint8_t r = rgba[pixel_i * 4 + 0];
+        uint8_t g = rgba[pixel_i * 4 + 1];
+        uint8_t b = rgba[pixel_i * 4 + 2];
+        pixels[pixel_i] = (uint16_t)(((r & 0xF8) << 8) | ((g & 0xFC) << 3) | (b >> 3));
     }
     free(rgba);
 

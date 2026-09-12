@@ -31,6 +31,14 @@ typedef enum {
     CLOCK_FACE_ANALOG  = 1,
 } clock_face_t;
 
+typedef enum {
+    DISPLAY_THEME_DARK  = 0,
+    DISPLAY_THEME_LIGHT = 1,
+    /* Switches between dark/light on its own, based on the time of day - see
+     * theme_day_start/theme_night_start below. */
+    DISPLAY_THEME_AUTO  = 2,
+} display_theme_t;
+
 typedef struct {
     /* --- Wi-Fi / network --- */
     char     wifi_ssid[APP_CFG_SSID_MAX_LEN];
@@ -52,6 +60,15 @@ typedef struct {
     uint8_t  brightness;          /* 0-100 */
     bool     auto_cycle_enabled;  /* rotate through screens automatically */
     uint16_t cycle_seconds;       /* dwell time per screen when cycling */
+    display_theme_t display_theme;    /* dark/light/auto */
+    /* AUTO only: "HH:MM" - when to switch to light/dark. Sized a couple
+     * bytes past "HH:MM"+nul (not the tight minimum) so strncpy's n in
+     * app_config_reset_defaults() exceeds the default strings' length -
+     * exactly matching length made GCC flag it as a possible truncation
+     * (-Werror=stringop-truncation), even though the buffer is zeroed by
+     * memset() first and so is always nul-terminated regardless. */
+    char     theme_day_start[8];
+    char     theme_night_start[8];
 
     /* --- Photo album --- */
     uint16_t album_interval_s;

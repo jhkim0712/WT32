@@ -20,6 +20,8 @@ setup is just a camera scan away.
 - **Clock screen** - large digital time + date, auto-updated from SNTP.
 - **Photo album** - slideshow of `.bmp` / `.jpg` / `.png` images from a
   microSD card, swipe or tap to advance, configurable interval and shuffle.
+  `.gif` files play as animated GIFs (native size, centered) instead of
+  being stretched to fill the panel like the static formats.
 - **Weather screen** - current conditions from OpenWeatherMap (temperature,
   description, humidity, wind), with a day/night condition icon from the
   bundled [Weather Icons](https://github.com/erikflowers/weather-icons)
@@ -40,6 +42,8 @@ setup is just a camera scan away.
     portal fallback so you're never locked out.
   - Timezone (POSIX TZ string), NTP server, 12h/24h format, hourly chime.
   - Brightness, auto-cycle, mute.
+  - Dark/Light theme, or Auto to switch on its own at times you set (e.g.
+    light from 07:00, dark from 20:00).
   - Photo album interval/shuffle.
   - Weather: OpenWeatherMap API key + city ID, enable/disable the screen.
   - Hostname, restart, factory reset, fallback AP password.
@@ -136,14 +140,21 @@ The component manager will fetch the managed dependencies
 
 ### Photo album
 
-Copy `.bmp` (24-bit uncompressed), `.jpg`/`.jpeg`, and/or `.png` files into a
-`photos/` folder at the root of the microSD card (i.e. `/photos/*.bmp`).
-Images are automatically scaled to fill the 480x320 panel; for best quality,
-pre-crop/resize them to 480x320 before copying. BMP is the guaranteed-to-work
-format with zero external dependencies; JPEG and PNG go through the
-`espressif/esp_jpeg` and `espressif/libpng` managed components respectively
-(see notes below). PNG transparency is ignored (flattened to opaque) since
-photos fill the whole screen with nothing behind them to show through to.
+Copy `.bmp` (24-bit uncompressed), `.jpg`/`.jpeg`, `.png` and/or `.gif` files
+into a `photos/` folder at the root of the microSD card (i.e.
+`/photos/*.bmp`). The static formats (bmp/jpg/png) are automatically scaled
+to fill the 480x320 panel; for best quality, pre-crop/resize them to 480x320
+before copying. BMP is the guaranteed-to-work format with zero external
+dependencies; JPEG and PNG go through the `espressif/esp_jpeg` and
+`espressif/libpng` managed components respectively (see notes below). PNG
+transparency is ignored (flattened to opaque) since photos fill the whole
+screen with nothing behind them to show through to.
+
+`.gif` files play as animated GIFs instead, through LVGL's own decoder -
+a different pipeline from the static formats above, so they're **not**
+scaled to fill the panel; they show at their native resolution, centered.
+Keep them reasonably small (both in pixel size and file size) for smooth
+playback and to avoid using up too much of the panel's frame buffer memory.
 
 ## Firmware updates
 

@@ -22,9 +22,9 @@ bool app_files_resolve(const char *rel_path, char *out_abs, size_t out_abs_len)
      * returned length right below, not relied upon to never happen. */
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wformat-truncation"
-    int n = snprintf(out_abs, out_abs_len, "%s%s", BSP_SD_MOUNT_POINT, rel_path);
+    int written = snprintf(out_abs, out_abs_len, "%s%s", BSP_SD_MOUNT_POINT, rel_path);
 #pragma GCC diagnostic pop
-    return (n > 0 && (size_t)n < out_abs_len);
+    return (written > 0 && (size_t)written < out_abs_len);
 }
 
 esp_err_t app_files_list(const char *rel_dir, app_files_entry_t *out, size_t max_entries, size_t *out_count)

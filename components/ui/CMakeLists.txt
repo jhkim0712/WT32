@@ -9,6 +9,7 @@ idf_component_register(
         "font_weather_icons_64.c"
         "ui_info.c"
         "ui_setup.c"
+        "ui_theme.c"
     INCLUDE_DIRS "include"
     PRIV_INCLUDE_DIRS "."
     REQUIRES
@@ -22,4 +23,5 @@ idf_component_register(
         app_ota
         esp_timer
         esp_system
+        esp_psram
 )

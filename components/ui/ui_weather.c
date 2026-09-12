@@ -5,15 +5,35 @@
 #include "app_weather.h"
 #include "ui_weather_icons.h"
 
+static lv_obj_t *s_scr;
 static lv_obj_t *s_icon_label;
 static lv_obj_t *s_temp_label;
 static lv_obj_t *s_desc_label;
 static lv_obj_t *s_detail_label;
 static lv_obj_t *s_status_label;
+static bool s_theme_dark = true; /* sentinel matching the initial style below; forces the first apply_theme() to run */
+
+static void apply_theme(void)
+{
+    bool dark = ui_theme_is_dark();
+    if (dark == s_theme_dark) {
+        return;
+    }
+    s_theme_dark = dark;
+
+    lv_obj_set_style_bg_color(s_scr, ui_theme_color(0x0b1a1a, 0xf1f8f7), 0);
+    lv_obj_set_style_text_color(s_icon_label, ui_theme_color(0xffffff, 0x1c1f26), 0);
+    lv_obj_set_style_text_color(s_temp_label, ui_theme_color(0x35d0c3, 0x0d8f82), 0);
+    lv_obj_set_style_text_color(s_desc_label, ui_theme_color(0xffffff, 0x1c1f26), 0);
+    lv_obj_set_style_text_color(s_detail_label, ui_theme_color(0xb7d6d2, 0x4d6b67), 0);
+    lv_obj_set_style_text_color(s_status_label, ui_theme_color(0xffb300, 0xa66a00), 0);
+}
 
 static void update_cb(lv_timer_t *t)
 {
     (void)t;
+    apply_theme();
+
     app_config_t *cfg = app_config_get();
 
     if (!cfg->weather_enabled) {
@@ -86,6 +106,9 @@ static void update_cb(lv_timer_t *t)
 lv_obj_t *ui_weather_create(void)
 {
     lv_obj_t *scr = lv_obj_create(NULL);
+    s_scr = scr;
+    /* Dark-theme colors, matching s_theme_dark's initial value above - see
+     * apply_theme(), which takes over from here once the theme is resolved. */
     lv_obj_set_style_bg_color(scr, lv_color_hex(0x0b1a1a), 0);
     lv_obj_set_style_bg_opa(scr, LV_OPA_COVER, 0);
     lv_obj_set_style_border_width(scr, 0, 0);

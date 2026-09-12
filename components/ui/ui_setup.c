@@ -14,10 +14,32 @@
 #include "app_config.h"
 #include "app_wifi.h"
 
+static lv_obj_t *s_scr;
+static lv_obj_t *s_title;
 static lv_obj_t *s_qr;
+static lv_obj_t *s_scan_hint;
 static lv_obj_t *s_creds_label;
+static lv_obj_t *s_step2;
 static char s_last_ssid[33] = {0};
 static char s_last_pw[APP_CFG_PASS_MAX_LEN] = {0};
+static bool s_theme_dark = true; /* sentinel matching the initial style below; forces the first apply_theme() to run */
+
+static void apply_theme(void)
+{
+    bool dark = ui_theme_is_dark();
+    if (dark == s_theme_dark) {
+        return;
+    }
+    s_theme_dark = dark;
+
+    /* The QR code itself stays black-on-white regardless of theme - a
+     * scanner needs the contrast, not a matching color scheme. */
+    lv_obj_set_style_bg_color(s_scr, ui_theme_color(0x10161f, 0xf5f6f9), 0);
+    lv_obj_set_style_text_color(s_title, ui_theme_color(0xffffff, 0x1c1f26), 0);
+    lv_obj_set_style_text_color(s_scan_hint, ui_theme_color(0x9e9e9e, 0x5f6368), 0);
+    lv_obj_set_style_text_color(s_creds_label, ui_theme_color(0xffffff, 0x1c1f26), 0);
+    lv_obj_set_style_text_color(s_step2, ui_theme_color(0x9e9e9e, 0x5f6368), 0);
+}
 
 /* Escape the characters the "WIFI:" QR payload treats as separators, per
  * https://github.com/zxing/zxing/wiki/Barcode-Contents - the generated AP
@@ -25,20 +47,22 @@ static char s_last_pw[APP_CFG_PASS_MAX_LEN] = {0};
  * could contain any of these. */
 static void escape_qr_field(const char *in, char *out, size_t out_len)
 {
-    size_t o = 0;
-    for (size_t i = 0; in[i] != '\0' && o + 2 < out_len; i++) {
-        char c = in[i];
+    size_t out_i = 0;
+    for (size_t in_i = 0; in[in_i] != '\0' && out_i + 2 < out_len; in_i++) {
+        char c = in[in_i];
         if (c == '\\' || c == ';' || c == ',' || c == ':' || c == '"') {
-            out[o++] = '\\';
+            out[out_i++] = '\\';
         }
-        out[o++] = c;
+        out[out_i++] = c;
     }
-    out[o] = '\0';
+    out[out_i] = '\0';
 }
 
 static void update_cb(lv_timer_t *t)
 {
     (void)t;
+    apply_theme();
+
     char ssid[33];
     app_wifi_get_ap_ssid(ssid, sizeof(ssid));
     const char *pw = app_config_get()->ap_password;
@@ -75,15 +99,18 @@ static void update_cb(lv_timer_t *t)
 lv_obj_t *ui_setup_create(void)
 {
     lv_obj_t *scr = lv_obj_create(NULL);
+    s_scr = scr;
+    /* Dark-theme colors, matching s_theme_dark's initial value above - see
+     * apply_theme(), which takes over from here once the theme is resolved. */
     lv_obj_set_style_bg_color(scr, lv_color_hex(0x10161f), 0);
     lv_obj_set_style_bg_opa(scr, LV_OPA_COVER, 0);
     lv_obj_set_style_border_width(scr, 0, 0);
 
-    lv_obj_t *title = lv_label_create(scr);
-    lv_label_set_text(title, "Wi-Fi Setup");
-    lv_obj_set_style_text_font(title, &lv_font_montserrat_24, 0);
-    lv_obj_set_style_text_color(title, lv_color_white(), 0);
-    lv_obj_align(title, LV_ALIGN_TOP_MID, 0, 18);
+    s_title = lv_label_create(scr);
+    lv_label_set_text(s_title, "Wi-Fi Setup");
+    lv_obj_set_style_text_font(s_title, &lv_font_montserrat_24, 0);
+    lv_obj_set_style_text_color(s_title, lv_color_white(), 0);
+    lv_obj_align(s_title, LV_ALIGN_TOP_MID, 0, 18);
 
     s_qr = lv_qrcode_create(scr);
     lv_qrcode_set_size(s_qr, 180);
@@ -92,11 +119,11 @@ lv_obj_t *ui_setup_create(void)
     lv_qrcode_set_quiet_zone(s_qr, true); /* scanners need the white margin around the modules */
     lv_obj_align(s_qr, LV_ALIGN_LEFT_MID, 30, 15);
 
-    lv_obj_t *scan_hint = lv_label_create(scr);
-    lv_label_set_text(scan_hint, "Scan with your phone's camera");
-    lv_obj_set_style_text_font(scan_hint, &lv_font_montserrat_14, 0);
-    lv_obj_set_style_text_color(scan_hint, lv_palette_main(LV_PALETTE_GREY), 0);
-    lv_obj_align_to(scan_hint, s_qr, LV_ALIGN_OUT_BOTTOM_MID, 0, 8);
+    s_scan_hint = lv_label_create(scr);
+    lv_label_set_text(s_scan_hint, "Scan with your phone's camera");
+    lv_obj_set_style_text_font(s_scan_hint, &lv_font_montserrat_14, 0);
+    lv_obj_set_style_text_color(s_scan_hint, lv_palette_main(LV_PALETTE_GREY), 0);
+    lv_obj_align_to(s_scan_hint, s_qr, LV_ALIGN_OUT_BOTTOM_MID, 0, 8);
 
     /* Right column, clear of the QR block (which ends around x=210). */
     s_creds_label = lv_label_create(scr);
@@ -105,12 +132,12 @@ lv_obj_t *ui_setup_create(void)
     lv_obj_set_width(s_creds_label, 210);
     lv_obj_align(s_creds_label, LV_ALIGN_LEFT_MID, 240, -30);
 
-    lv_obj_t *step2 = lv_label_create(scr);
-    lv_label_set_text(step2, "Or connect manually,\nthen open\nhttp://192.168.4.1/");
-    lv_obj_set_style_text_font(step2, &lv_font_montserrat_14, 0);
-    lv_obj_set_style_text_color(step2, lv_palette_main(LV_PALETTE_GREY), 0);
-    lv_obj_set_width(step2, 210);
-    lv_obj_align_to(step2, s_creds_label, LV_ALIGN_OUT_BOTTOM_LEFT, 0, 20);
+    s_step2 = lv_label_create(scr);
+    lv_label_set_text(s_step2, "Or connect manually,\nthen open\nhttp://192.168.4.1/");
+    lv_obj_set_style_text_font(s_step2, &lv_font_montserrat_14, 0);
+    lv_obj_set_style_text_color(s_step2, lv_palette_main(LV_PALETTE_GREY), 0);
+    lv_obj_set_width(s_step2, 210);
+    lv_obj_align_to(s_step2, s_creds_label, LV_ALIGN_OUT_BOTTOM_LEFT, 0, 20);
 
     lv_timer_create(update_cb, 3000, NULL);
     update_cb(NULL); /* fill in the QR/labels now instead of leaving them blank for 3s */

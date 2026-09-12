@@ -95,15 +95,24 @@ void app_ota_get_current_version(char *buf, size_t len)
     buf[len - 1] = '\0';
 }
 
+/* Indexes lv[]/cv[] below - a plain 3-element array indexed by 0/1/2 would
+ * force every reader to remember which slot is which "vX.Y.Z" component. */
+typedef enum {
+    VERSION_PART_MAJOR = 0,
+    VERSION_PART_MINOR,
+    VERSION_PART_PATCH,
+    VERSION_PART_COUNT,
+} version_part_t;
+
 bool app_ota_version_is_newer(const char *latest, const char *current)
 {
-    int lv[3] = {0, 0, 0};
-    int cv[3] = {0, 0, 0};
-    sscanf(latest, "%d.%d.%d", &lv[0], &lv[1], &lv[2]);
-    sscanf(current, "%d.%d.%d", &cv[0], &cv[1], &cv[2]);
-    for (int i = 0; i < 3; i++) {
-        if (lv[i] != cv[i]) {
-            return lv[i] > cv[i];
+    int lv[VERSION_PART_COUNT] = {0};
+    int cv[VERSION_PART_COUNT] = {0};
+    sscanf(latest, "%d.%d.%d", &lv[VERSION_PART_MAJOR], &lv[VERSION_PART_MINOR], &lv[VERSION_PART_PATCH]);
+    sscanf(current, "%d.%d.%d", &cv[VERSION_PART_MAJOR], &cv[VERSION_PART_MINOR], &cv[VERSION_PART_PATCH]);
+    for (version_part_t part = 0; part < VERSION_PART_COUNT; part++) {
+        if (lv[part] != cv[part]) {
+            return lv[part] > cv[part];
         }
     }
     return false;

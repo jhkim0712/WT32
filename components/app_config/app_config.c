@@ -25,6 +25,9 @@ static const char *NVS_NAMESPACE = "wt32cfg";
 #define KEY_BRIGHTNESS   "bright"
 #define KEY_AUTO_CYCLE   "auto_cyc"
 #define KEY_CYCLE_SEC    "cyc_sec"
+#define KEY_THEME        "theme"
+#define KEY_THEME_DAY    "theme_day"
+#define KEY_THEME_NIGHT  "theme_night"
 #define KEY_ALB_INT      "alb_int"
 #define KEY_ALB_SHUFFLE  "alb_shuf"
 #define KEY_WTHR_EN      "wthr_en"
@@ -54,6 +57,9 @@ void app_config_reset_defaults(app_config_t *cfg)
     cfg->brightness = 80;
     cfg->auto_cycle_enabled = true;
     cfg->cycle_seconds = 10;
+    cfg->display_theme = DISPLAY_THEME_DARK; /* matches the UI's original always-dark look */
+    strncpy(cfg->theme_day_start, "07:00", sizeof(cfg->theme_day_start) - 1);
+    strncpy(cfg->theme_night_start, "20:00", sizeof(cfg->theme_night_start) - 1);
 
     cfg->album_interval_s = 8;
     cfg->album_shuffle = false;
@@ -134,6 +140,13 @@ esp_err_t app_config_load(void)
     load_u8(handle, KEY_BRIGHTNESS, &s_cfg.brightness);
     load_bool(handle, KEY_AUTO_CYCLE, &s_cfg.auto_cycle_enabled);
     load_u16(handle, KEY_CYCLE_SEC, &s_cfg.cycle_seconds);
+    {
+        uint8_t theme = (uint8_t)s_cfg.display_theme;
+        load_u8(handle, KEY_THEME, &theme);
+        s_cfg.display_theme = (display_theme_t)theme;
+    }
+    load_str(handle, KEY_THEME_DAY, s_cfg.theme_day_start, sizeof(s_cfg.theme_day_start));
+    load_str(handle, KEY_THEME_NIGHT, s_cfg.theme_night_start, sizeof(s_cfg.theme_night_start));
 
     load_u16(handle, KEY_ALB_INT, &s_cfg.album_interval_s);
     load_bool(handle, KEY_ALB_SHUFFLE, &s_cfg.album_shuffle);
@@ -183,6 +196,9 @@ esp_err_t app_config_save(void)
     CHECK(nvs_set_u8(handle, KEY_BRIGHTNESS, s_cfg.brightness));
     CHECK(nvs_set_u8(handle, KEY_AUTO_CYCLE, s_cfg.auto_cycle_enabled ? 1 : 0));
     CHECK(nvs_set_u16(handle, KEY_CYCLE_SEC, s_cfg.cycle_seconds));
+    CHECK(nvs_set_u8(handle, KEY_THEME, (uint8_t)s_cfg.display_theme));
+    CHECK(nvs_set_str(handle, KEY_THEME_DAY, s_cfg.theme_day_start));
+    CHECK(nvs_set_str(handle, KEY_THEME_NIGHT, s_cfg.theme_night_start));
 
     CHECK(nvs_set_u16(handle, KEY_ALB_INT, s_cfg.album_interval_s));
     CHECK(nvs_set_u8(handle, KEY_ALB_SHUFFLE, s_cfg.album_shuffle ? 1 : 0));
