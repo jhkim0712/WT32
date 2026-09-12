@@ -12,6 +12,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <inttypes.h>
 #include <png.h>
 #include "esp_log.h"
 #include "esp_heap_caps.h"
@@ -50,6 +51,9 @@ esp_err_t app_photo_png_decode_native(const char *path, uint16_t **out_buf, uint
      * ask for it explicitly rather than let the general allocator pick. */
     png_bytep rgba = heap_caps_malloc(rgba_size, MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT);
     if (!rgba) {
+        ESP_LOGW(TAG, "%s: out of PSRAM decoding %" PRIu32 "x%" PRIu32 " (%u bytes needed, %u free)", path,
+                 (uint32_t)image.width, (uint32_t)image.height, (unsigned)rgba_size,
+                 (unsigned)heap_caps_get_free_size(MALLOC_CAP_SPIRAM));
         png_image_free(&image);
         return ESP_ERR_NO_MEM;
     }
@@ -75,6 +79,8 @@ esp_err_t app_photo_png_decode_native(const char *path, uint16_t **out_buf, uint
 
     uint16_t *pixels = heap_caps_malloc(rgb565_size, MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT);
     if (!pixels) {
+        ESP_LOGW(TAG, "%s: out of PSRAM decoding %" PRIu32 "x%" PRIu32 " (%u bytes needed, %u free)", path, width,
+                 height, (unsigned)rgb565_size, (unsigned)heap_caps_get_free_size(MALLOC_CAP_SPIRAM));
         free(rgba);
         return ESP_ERR_NO_MEM;
     }

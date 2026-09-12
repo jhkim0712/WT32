@@ -124,6 +124,11 @@ esp_err_t app_photo_decode_to_canvas(size_t index, uint16_t canvas_w, uint16_t c
     if (!path) {
         return ESP_ERR_INVALID_ARG;
     }
+    /* Debug, not info: this fires every slideshow tick (every few seconds),
+     * so it would spam the default log level - but printed before any
+     * decode work starts, so with debug logging enabled a crash/hang/OOM
+     * right after this line still identifies which file caused it. */
+    ESP_LOGD(TAG, "Decoding %s (%u/%u)", path, (unsigned)(index + 1), (unsigned)s_count);
 
     uint16_t *native = NULL;
     uint16_t native_w = 0, native_h = 0;

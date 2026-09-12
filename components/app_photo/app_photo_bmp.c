@@ -82,6 +82,9 @@ esp_err_t app_photo_bmp_decode_native(const char *path, uint16_t **out_buf, uint
      * than let the general allocator pick. */
     uint16_t *buf = heap_caps_malloc((size_t)width * height * sizeof(uint16_t), MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT);
     if (!buf) {
+        ESP_LOGW(TAG, "%s: out of PSRAM decoding %dx%d (%u bytes needed, %u free)", path, width, height,
+                 (unsigned)((size_t)width * height * sizeof(uint16_t)),
+                 (unsigned)heap_caps_get_free_size(MALLOC_CAP_SPIRAM));
         fclose(f);
         return ESP_ERR_NO_MEM;
     }

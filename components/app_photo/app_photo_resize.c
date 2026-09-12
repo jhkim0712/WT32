@@ -1,7 +1,10 @@
 #include <stdlib.h>
 #include <string.h>
+#include "esp_log.h"
 #include "esp_heap_caps.h"
 #include "app_photo_internal.h"
+
+static const char *TAG = "app_photo_resize";
 
 uint16_t *app_photo_resize_rgb565(const uint16_t *src, uint16_t src_w, uint16_t src_h,
                                    uint16_t dst_w, uint16_t dst_h)
@@ -10,13 +13,16 @@ uint16_t *app_photo_resize_rgb565(const uint16_t *src, uint16_t src_w, uint16_t 
      * has room for that, the ~400KB of internal DRAM left over after
      * LVGL/Wi-Fi/lwIP does not, so ask for it explicitly rather than let the
      * general allocator pick. */
-    uint16_t *dst = heap_caps_malloc((size_t)dst_w * dst_h * sizeof(uint16_t), MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT);
+    size_t dst_size = (size_t)dst_w * dst_h * sizeof(uint16_t);
+    uint16_t *dst = heap_caps_malloc(dst_size, MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT);
     if (!dst) {
+        ESP_LOGW(TAG, "out of PSRAM allocating the %ux%u canvas (%u bytes needed, %u free)", dst_w, dst_h,
+                 (unsigned)dst_size, (unsigned)heap_caps_get_free_size(MALLOC_CAP_SPIRAM));
         return NULL;
     }
 
     if (src_w == dst_w && src_h == dst_h) {
-        memcpy(dst, src, (size_t)dst_w * dst_h * sizeof(uint16_t));
+        memcpy(dst, src, dst_size);
         return dst;
     }
 

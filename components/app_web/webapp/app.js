@@ -216,6 +216,7 @@
     $("weatherApiKey").value = currentConfig.weather_api_key || "";
     $("weatherCityId").value = currentConfig.weather_city_id || "";
     $("hostname").value = currentConfig.hostname || "";
+    $("logLevel").value = currentConfig.log_level || "info";
     $("githubRepo").value = currentConfig.github_repo || "";
   }
 
@@ -304,7 +305,7 @@
   document.querySelector('.tab[data-tab="weather"]').addEventListener("click", refreshWeatherStatus);
 
   $("btnSaveSystem").addEventListener("click", function () {
-    saveConfig({ hostname: $("hostname").value }, $("systemMsg"));
+    saveConfig({ hostname: $("hostname").value, log_level: $("logLevel").value }, $("systemMsg"));
   });
 
   $("btnRestart").addEventListener("click", async function () {
