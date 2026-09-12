@@ -595,47 +595,96 @@
     return tr;
   }
 
-  $("btnFilesUpload").addEventListener("click", function () {
-    const input = $("filesUploadInput");
-    const msg = $("filesMsg");
-    if (!input.files || input.files.length === 0) {
-      showMsg(msg, "Choose a file first", false);
+  /* Uploads one file, resolving (never rejecting) with {ok, error} so a
+   * multi-file batch (see uploadFiles()) can keep going past one failure
+   * instead of the whole queue stopping on it. */
+  function uploadOneFile(file) {
+    return new Promise(function (resolve) {
+      const url = "/api/files/upload?path=" + encodeURIComponent(filesCurrentPath) +
+                  "&name=" + encodeURIComponent(file.name);
+      const xhr = new XMLHttpRequest();
+      xhr.open("POST", url);
+
+      xhr.upload.addEventListener("progress", function (e) {
+        if (e.lengthComputable) {
+          $("filesUploadProgressBar").style.width = Math.round((e.loaded / e.total) * 100) + "%";
+        }
+      });
+
+      xhr.addEventListener("load", function () {
+        let data = {};
+        try { data = JSON.parse(xhr.responseText); } catch (e) { /* ignore */ }
+        resolve(xhr.status === 200 && data.ok ? { ok: true } : { ok: false, error: data.error || String(xhr.status) });
+      });
+
+      xhr.addEventListener("error", function () {
+        resolve({ ok: false, error: "connection error" });
+      });
+
+      xhr.send(file);
+    });
+  }
+
+  /* Uploads a FileList/array one at a time (the device only has one SD card
+   * SPI bus and one httpd worker anyway, so there's no throughput to gain
+   * from parallel requests) - used by both the file picker and drag/drop. */
+  async function uploadFiles(fileList) {
+    if (!fileList || fileList.length === 0) {
+      showMsg($("filesMsg"), "Choose a file first", false);
       return;
     }
-    const file = input.files[0];
-    const url = "/api/files/upload?path=" + encodeURIComponent(filesCurrentPath) +
-                "&name=" + encodeURIComponent(file.name);
 
-    const xhr = new XMLHttpRequest();
-    xhr.open("POST", url);
+    const queueMsg = $("filesUploadQueueMsg");
     $("filesUploadProgressWrap").hidden = false;
-    $("filesUploadProgressBar").style.width = "0%";
+    let failed = 0;
 
-    xhr.upload.addEventListener("progress", function (e) {
-      if (e.lengthComputable) {
-        $("filesUploadProgressBar").style.width = Math.round((e.loaded / e.total) * 100) + "%";
+    for (let i = 0; i < fileList.length; i++) {
+      const file = fileList[i];
+      queueMsg.textContent = fileList.length > 1 ? "Uploading " + (i + 1) + " of " + fileList.length + ": " + file.name : "";
+      $("filesUploadProgressBar").style.width = "0%";
+      const result = await uploadOneFile(file);
+      if (!result.ok) {
+        failed++;
+        showMsg($("filesMsg"), "Failed to upload " + file.name + ": " + result.error, false);
       }
-    });
+    }
 
-    xhr.addEventListener("load", function () {
-      $("filesUploadProgressWrap").hidden = true;
-      let data = {};
-      try { data = JSON.parse(xhr.responseText); } catch (e) { /* ignore */ }
-      if (xhr.status === 200 && data.ok) {
-        showMsg(msg, "Uploaded " + file.name, true);
-        input.value = "";
-        loadFiles(filesCurrentPath);
-      } else {
-        showMsg(msg, "Upload failed: " + (data.error || xhr.status), false);
-      }
-    });
+    $("filesUploadProgressWrap").hidden = true;
+    queueMsg.textContent = "";
+    if (failed === 0) {
+      showMsg($("filesMsg"), fileList.length === 1 ? "Uploaded " + fileList[0].name : "Uploaded " + fileList.length + " files", true);
+    } else if (failed < fileList.length) {
+      showMsg($("filesMsg"), failed + " of " + fileList.length + " uploads failed", false);
+    }
+    loadFiles(filesCurrentPath);
+  }
 
-    xhr.addEventListener("error", function () {
-      $("filesUploadProgressWrap").hidden = true;
-      showMsg(msg, "Upload failed (connection error)", false);
-    });
+  $("btnFilesUpload").addEventListener("click", function () {
+    const input = $("filesUploadInput");
+    uploadFiles(input.files).then(function () { input.value = ""; });
+  });
 
-    xhr.send(file);
+  /* ---- Drag and drop files anywhere onto the Files card ---- */
+  const filesDropZone = $("filesDropZone");
+  ["dragenter", "dragover"].forEach(function (evt) {
+    filesDropZone.addEventListener(evt, function (e) {
+      e.preventDefault(); /* required, or the browser refuses the drop entirely */
+      filesDropZone.classList.add("drag-over");
+    });
+  });
+  filesDropZone.addEventListener("dragleave", function (e) {
+    /* Children re-fire dragenter/dragleave as the pointer crosses them -
+     * ignore it unless the pointer actually left the whole drop zone. */
+    if (!filesDropZone.contains(e.relatedTarget)) {
+      filesDropZone.classList.remove("drag-over");
+    }
+  });
+  filesDropZone.addEventListener("drop", function (e) {
+    e.preventDefault();
+    filesDropZone.classList.remove("drag-over");
+    if (e.dataTransfer && e.dataTransfer.files.length > 0) {
+      uploadFiles(e.dataTransfer.files);
+    }
   });
 
   $("btnFilesMkdir").addEventListener("click", async function () {

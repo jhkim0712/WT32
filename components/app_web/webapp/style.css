@@ -71,6 +71,11 @@ main { max-width: 640px; margin: 0 auto; padding: 1rem; }
   padding: 1.1rem 1.2rem;
 }
 .card h2 { margin-top: 0; font-size: 1rem; color: var(--accent); }
+.card.drag-over {
+  outline: 2px dashed var(--accent);
+  outline-offset: -6px;
+  background: var(--accent-dim);
+}
 
 .grid2 {
   display: grid;

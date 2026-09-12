@@ -50,7 +50,8 @@ setup is just a camera scan away.
   - **File manager**: browse, upload, download/view, rename and delete
     anything on the microSD card, right from the browser (no separate app
     needed to load photos onto it) - plus a one-click **format** to fully
-    erase and reformat the card if it needs wiping.
+    erase and reformat the card if it needs wiping. Upload picks multiple
+    files at once or accepts a drag-and-drop of files onto the panel.
   - **Firmware updates**: upload a `.bin` file directly, or check a GitHub
     repo's releases and install with one click - see [Firmware updates](#firmware-updates).
 - Reachable by IP or via mDNS (`http://<hostname>.local/`, default
@@ -290,6 +291,11 @@ authentication either - anyone who can reach the device's IP (its own AP,
 or your home network once joined) can read/write/delete anything under
 `/sdcard`. Keep that in mind before joining the device to a network you
 don't trust everyone on.
+
+## Contributing
+
+See [CONTRIBUTING.md](CONTRIBUTING.md) for coding style and project
+conventions before sending a PR.
 
 ## License
 
