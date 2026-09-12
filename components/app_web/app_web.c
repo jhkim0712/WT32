@@ -150,6 +150,17 @@ static esp_err_t script_get_handler(httpd_req_t *req)
                             webapp_app_js_end - webapp_app_js_start);
 }
 
+/* index.html links an inline SVG favicon, but some browsers request
+ * /favicon.ico directly regardless - without this it falls through to the
+ * 404 handler below, which still works (redirects to "/") but logs an IDF
+ * "URI not found" warning on every single page load. A quiet empty
+ * response is simpler than embedding an actual .ico asset just for this. */
+static esp_err_t favicon_get_handler(httpd_req_t *req)
+{
+    httpd_resp_set_status(req, "204 No Content");
+    return httpd_resp_send(req, NULL, 0);
+}
+
 /* ---------------------------------------------------------------------- */
 /* /api/status                                                             */
 /* ---------------------------------------------------------------------- */
@@ -195,6 +206,15 @@ static const char *clock_face_to_str(clock_face_t f)
     return f == CLOCK_FACE_ANALOG ? "analog" : "digital";
 }
 
+static const char *display_theme_to_str(display_theme_t t)
+{
+    switch (t) {
+        case DISPLAY_THEME_LIGHT: return "light";
+        case DISPLAY_THEME_AUTO:  return "auto";
+        default:                  return "dark";
+    }
+}
+
 static esp_err_t config_get_handler(httpd_req_t *req)
 {
     app_config_t *cfg = app_config_get();
@@ -210,6 +230,9 @@ static esp_err_t config_get_handler(httpd_req_t *req)
     cJSON_AddNumberToObject(root, "brightness", cfg->brightness);
     cJSON_AddBoolToObject(root, "auto_cycle_enabled", cfg->auto_cycle_enabled);
     cJSON_AddNumberToObject(root, "cycle_seconds", cfg->cycle_seconds);
+    cJSON_AddStringToObject(root, "display_theme", display_theme_to_str(cfg->display_theme));
+    cJSON_AddStringToObject(root, "theme_day_start", cfg->theme_day_start);
+    cJSON_AddStringToObject(root, "theme_night_start", cfg->theme_night_start);
     cJSON_AddNumberToObject(root, "album_interval_s", cfg->album_interval_s);
     cJSON_AddBoolToObject(root, "album_shuffle", cfg->album_shuffle);
     cJSON_AddBoolToObject(root, "weather_enabled", cfg->weather_enabled);
@@ -268,6 +291,21 @@ static esp_err_t config_post_handler(httpd_req_t *req)
     }
     if ((item = cJSON_GetObjectItem(root, "cycle_seconds")) && cJSON_IsNumber(item)) {
         cfg->cycle_seconds = (uint16_t)item->valuedouble;
+    }
+    if ((item = cJSON_GetObjectItem(root, "display_theme")) && cJSON_IsString(item)) {
+        if (strcmp(item->valuestring, "light") == 0) {
+            cfg->display_theme = DISPLAY_THEME_LIGHT;
+        } else if (strcmp(item->valuestring, "auto") == 0) {
+            cfg->display_theme = DISPLAY_THEME_AUTO;
+        } else {
+            cfg->display_theme = DISPLAY_THEME_DARK;
+        }
+    }
+    if ((item = cJSON_GetObjectItem(root, "theme_day_start")) && cJSON_IsString(item)) {
+        strncpy(cfg->theme_day_start, item->valuestring, sizeof(cfg->theme_day_start) - 1);
+    }
+    if ((item = cJSON_GetObjectItem(root, "theme_night_start")) && cJSON_IsString(item)) {
+        strncpy(cfg->theme_night_start, item->valuestring, sizeof(cfg->theme_night_start) - 1);
     }
     if ((item = cJSON_GetObjectItem(root, "album_interval_s")) && cJSON_IsNumber(item)) {
         cfg->album_interval_s = (uint16_t)item->valuedouble;
@@ -341,16 +379,16 @@ static esp_err_t weather_get_handler(httpd_req_t *req)
 
 static esp_err_t wifi_scan_get_handler(httpd_req_t *req)
 {
-    static app_wifi_ap_info_t list[20];
-    size_t n = app_wifi_scan(list, sizeof(list) / sizeof(list[0]));
+    static app_wifi_ap_info_t aps[20];
+    size_t ap_count = app_wifi_scan(aps, sizeof(aps) / sizeof(aps[0]));
 
     cJSON *arr = cJSON_CreateArray();
-    for (size_t i = 0; i < n; i++) {
-        cJSON *o = cJSON_CreateObject();
-        cJSON_AddStringToObject(o, "ssid", list[i].ssid);
-        cJSON_AddNumberToObject(o, "rssi", list[i].rssi);
-        cJSON_AddBoolToObject(o, "secure", list[i].authmode != WIFI_AUTH_OPEN);
-        cJSON_AddItemToArray(arr, o);
+    for (size_t ap_i = 0; ap_i < ap_count; ap_i++) {
+        cJSON *ap_json = cJSON_CreateObject();
+        cJSON_AddStringToObject(ap_json, "ssid", aps[ap_i].ssid);
+        cJSON_AddNumberToObject(ap_json, "rssi", aps[ap_i].rssi);
+        cJSON_AddBoolToObject(ap_json, "secure", aps[ap_i].authmode != WIFI_AUTH_OPEN);
+        cJSON_AddItemToArray(arr, ap_json);
     }
     return send_json(req, arr);
 }
@@ -632,12 +670,12 @@ static esp_err_t files_list_get_handler(httpd_req_t *req)
     cJSON *root = cJSON_CreateObject();
     cJSON_AddStringToObject(root, "path", path);
     cJSON *arr = cJSON_AddArrayToObject(root, "entries");
-    for (size_t i = 0; i < count; i++) {
-        cJSON *o = cJSON_CreateObject();
-        cJSON_AddStringToObject(o, "name", entries[i].name);
-        cJSON_AddBoolToObject(o, "is_dir", entries[i].is_dir);
-        cJSON_AddNumberToObject(o, "size", (double)entries[i].size);
-        cJSON_AddItemToArray(arr, o);
+    for (size_t entry_i = 0; entry_i < count; entry_i++) {
+        cJSON *entry_json = cJSON_CreateObject();
+        cJSON_AddStringToObject(entry_json, "name", entries[entry_i].name);
+        cJSON_AddBoolToObject(entry_json, "is_dir", entries[entry_i].is_dir);
+        cJSON_AddNumberToObject(entry_json, "size", (double)entries[entry_i].size);
+        cJSON_AddItemToArray(arr, entry_json);
     }
     return send_json(req, root);
 }
@@ -718,9 +756,9 @@ static esp_err_t files_upload_post_handler(httpd_req_t *req)
     char rel_path[APP_FILES_PATH_MAX];
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wformat-truncation"
-    int n = snprintf(rel_path, sizeof(rel_path), "%s/%s", dir_path, name);
+    int written = snprintf(rel_path, sizeof(rel_path), "%s/%s", dir_path, name);
 #pragma GCC diagnostic pop
-    if (n < 0 || (size_t)n >= sizeof(rel_path)) {
+    if (written < 0 || (size_t)written >= sizeof(rel_path)) {
         return send_json_error(req, "400 Bad Request", "path_too_long");
     }
 
@@ -880,7 +918,7 @@ static esp_err_t captive_redirect_handler(httpd_req_t *req, httpd_err_code_t err
 esp_err_t app_web_start(void)
 {
     httpd_config_t config = HTTPD_DEFAULT_CONFIG();
-    config.max_uri_handlers = 28; /* routes[] below is at 23 - keep a few spare */
+    config.max_uri_handlers = 28; /* routes[] below is at 24 - keep a few spare */
     config.lru_purge_enable = true;
     config.uri_match_fn = httpd_uri_match_wildcard;
     config.stack_size = 8192; /* OTA writes + JSON parsing want a bit more than the 4KB default */
@@ -896,6 +934,7 @@ esp_err_t app_web_start(void)
         {.uri = "/",                          .method = HTTP_GET,  .handler = index_get_handler},
         {.uri = "/style.css",                 .method = HTTP_GET,  .handler = style_get_handler},
         {.uri = "/app.js",                    .method = HTTP_GET,  .handler = script_get_handler},
+        {.uri = "/favicon.ico",               .method = HTTP_GET,  .handler = favicon_get_handler},
         {.uri = "/api/status",                .method = HTTP_GET,  .handler = status_get_handler},
         {.uri = "/api/config",                .method = HTTP_GET,  .handler = config_get_handler},
         {.uri = "/api/config",                .method = HTTP_POST, .handler = config_post_handler},
@@ -917,8 +956,8 @@ esp_err_t app_web_start(void)
         {.uri = "/api/files/mkdir",           .method = HTTP_POST, .handler = files_mkdir_post_handler},
         {.uri = "/api/sdcard/format",         .method = HTTP_POST, .handler = sdcard_format_post_handler},
     };
-    for (size_t i = 0; i < sizeof(routes) / sizeof(routes[0]); i++) {
-        httpd_register_uri_handler(server, &routes[i]);
+    for (size_t route_i = 0; route_i < sizeof(routes) / sizeof(routes[0]); route_i++) {
+        httpd_register_uri_handler(server, &routes[route_i]);
     }
     httpd_register_err_handler(server, HTTPD_404_NOT_FOUND, captive_redirect_handler);
 

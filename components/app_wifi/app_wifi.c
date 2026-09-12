@@ -264,11 +264,11 @@ size_t app_wifi_scan(app_wifi_ap_info_t *out, size_t max_entries)
     esp_wifi_scan_get_ap_records(&num, records);
 
     size_t count = 0;
-    for (int i = 0; i < num && count < max_entries; i++) {
-        strncpy(out[count].ssid, (char *)records[i].ssid, sizeof(out[count].ssid) - 1);
+    for (int record_i = 0; record_i < num && count < max_entries; record_i++) {
+        strncpy(out[count].ssid, (char *)records[record_i].ssid, sizeof(out[count].ssid) - 1);
         out[count].ssid[sizeof(out[count].ssid) - 1] = '\0';
-        out[count].rssi = records[i].rssi;
-        out[count].authmode = records[i].authmode;
+        out[count].rssi = records[record_i].rssi;
+        out[count].authmode = records[record_i].authmode;
         count++;
     }
     free(records);

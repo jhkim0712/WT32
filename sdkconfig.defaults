@@ -73,6 +73,16 @@ CONFIG_LV_FONT_DEFAULT_MONTSERRAT_16=y
 CONFIG_LV_USE_FONT_COMPRESSED=y
 # Renders the SoftAP QR code on the first-time setup screen (ui_setup.c).
 CONFIG_LV_USE_QRCODE=y
+# Animated GIFs in the photo album (ui_album.c), read straight off the SD
+# card. lv_gif opens files through LVGL's own filesystem layer, not plain
+# fopen(), so it needs a driver registered - the built-in POSIX one, on
+# drive letter "S:", with an empty root so "S:/sdcard/..." maps directly
+# onto the real "/sdcard/..." VFS path (same paths app_photo already uses).
+CONFIG_LV_USE_GIF=y
+CONFIG_LV_USE_FS_POSIX=y
+# 83 = ASCII 'S' - Kconfig's LV_FS_POSIX_LETTER is an int, not a char.
+CONFIG_LV_FS_POSIX_LETTER=83
+CONFIG_LV_FS_POSIX_PATH=""
 
 #
 # Logging

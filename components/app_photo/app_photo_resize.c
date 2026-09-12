@@ -1,11 +1,16 @@
 #include <stdlib.h>
 #include <string.h>
+#include "esp_heap_caps.h"
 #include "app_photo_internal.h"
 
 uint16_t *app_photo_resize_rgb565(const uint16_t *src, uint16_t src_w, uint16_t src_h,
                                    uint16_t dst_w, uint16_t dst_h)
 {
-    uint16_t *dst = malloc((size_t)dst_w * dst_h * sizeof(uint16_t));
+    /* Runs on every photo shown (the fixed 480x320 canvas is ~300KB) - PSRAM
+     * has room for that, the ~400KB of internal DRAM left over after
+     * LVGL/Wi-Fi/lwIP does not, so ask for it explicitly rather than let the
+     * general allocator pick. */
+    uint16_t *dst = heap_caps_malloc((size_t)dst_w * dst_h * sizeof(uint16_t), MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT);
     if (!dst) {
         return NULL;
     }

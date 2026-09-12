@@ -85,7 +85,7 @@ label { display: block; margin: 0.9rem 0 0.3rem; font-size: 0.85rem; color: var(
 label.switch-row { display: flex; align-items: center; gap: 0.5rem; font-size: 0.9rem; color: var(--text); }
 label.switch-row input { width: auto; }
 
-input[type="text"], input[type="password"], input[type="number"] {
+input[type="text"], input[type="password"], input[type="number"], input[type="time"], select {
   width: 100%;
   padding: 0.55rem 0.7rem;
   background: var(--panel-2);

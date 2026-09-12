@@ -124,10 +124,10 @@ esp_err_t bsp_audio_beep(uint32_t freq_hz, uint32_t duration_ms)
     if (!buf) {
         return ESP_ERR_NO_MEM;
     }
-    for (int i = 0; i < frame_count; i++) {
-        int16_t sample = (int16_t)(9000.0f * sinf(2.0f * (float)M_PI * i / frame_count));
-        buf[2 * i] = sample;
-        buf[2 * i + 1] = sample;
+    for (int frame_i = 0; frame_i < frame_count; frame_i++) {
+        int16_t sample = (int16_t)(9000.0f * sinf(2.0f * (float)M_PI * frame_i / frame_count));
+        buf[2 * frame_i] = sample;
+        buf[2 * frame_i + 1] = sample;
     }
 
     uint32_t elapsed_ms = 0;

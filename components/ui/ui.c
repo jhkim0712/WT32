@@ -3,7 +3,18 @@
 #include "bsp/bsp_board.h"
 #include "app_config.h"
 
-#define UI_PAGE_COUNT 5
+/* One entry per swipeable screen, in swipe order. Index into s_screens[] /
+ * s_on_show[] / s_page_visible[] below - add new screens here instead of as
+ * a bare array index, so the meaning of each slot stays self-documenting at
+ * every call site. */
+typedef enum {
+    UI_PAGE_SETUP = 0,
+    UI_PAGE_CLOCK,
+    UI_PAGE_ALBUM,
+    UI_PAGE_WEATHER,
+    UI_PAGE_INFO,
+    UI_PAGE_COUNT,
+} ui_page_t;
 
 static lv_obj_t *s_screens[UI_PAGE_COUNT];
 static void (*s_on_show[UI_PAGE_COUNT])(void);
@@ -13,17 +24,20 @@ static void (*s_on_show[UI_PAGE_COUNT])(void);
  * instead of being removed from the array, so no other index needs to shift
  * around at runtime. */
 static bool (*s_page_visible[UI_PAGE_COUNT])(void);
-static int s_current = 0;
+static ui_page_t s_current = UI_PAGE_SETUP;
 static lv_timer_t *s_cycle_timer = NULL;
 
-static int wrap_index(int index)
+/* index is a plain int, not ui_page_t - callers pass s_current +/- 1, which
+ * is transiently out of the enum's normal range until this wraps it back
+ * into [0, UI_PAGE_COUNT). */
+static ui_page_t wrap_index(int index)
 {
-    return ((index % UI_PAGE_COUNT) + UI_PAGE_COUNT) % UI_PAGE_COUNT;
+    return (ui_page_t)(((index % UI_PAGE_COUNT) + UI_PAGE_COUNT) % UI_PAGE_COUNT);
 }
 
-static bool page_is_visible(int index)
+static bool page_is_visible(ui_page_t page)
 {
-    return s_page_visible[index] == NULL || s_page_visible[index]();
+    return s_page_visible[page] == NULL || s_page_visible[page]();
 }
 
 /* Wi-Fi not configured yet: the normal screens (clock/album/weather) stay
@@ -42,7 +56,7 @@ static bool weather_page_visible(void)
 
 static void show_screen(int index, int step, lv_screen_load_anim_t anim)
 {
-    int next = wrap_index(index);
+    ui_page_t next = wrap_index(index);
     /* Skip disabled pages in the direction of travel. Bounded by
      * UI_PAGE_COUNT so an "everything disabled" edge case can't spin
      * forever - it just falls back to whatever index it started at. */
@@ -92,30 +106,40 @@ void ui_init(void)
 {
     bsp_display_lock(0);
 
-    s_screens[0] = ui_setup_create();
-    s_on_show[0] = ui_setup_on_show;
-    s_page_visible[0] = ui_setup_is_visible;
-    s_screens[1] = ui_clock_create();
-    s_on_show[1] = ui_clock_on_show;
-    s_page_visible[1] = page_visible_when_configured;
-    s_screens[2] = ui_album_create();
-    s_on_show[2] = ui_album_on_show;
-    s_page_visible[2] = page_visible_when_configured;
-    s_screens[3] = ui_weather_create();
-    s_on_show[3] = ui_weather_on_show;
-    s_page_visible[3] = weather_page_visible;
-    s_screens[4] = ui_info_create();
-    s_on_show[4] = ui_info_on_show;
+    s_screens[UI_PAGE_SETUP] = ui_setup_create();
+    s_on_show[UI_PAGE_SETUP] = ui_setup_on_show;
+    s_page_visible[UI_PAGE_SETUP] = ui_setup_is_visible;
+    s_screens[UI_PAGE_CLOCK] = ui_clock_create();
+    s_on_show[UI_PAGE_CLOCK] = ui_clock_on_show;
+    s_page_visible[UI_PAGE_CLOCK] = page_visible_when_configured;
+    s_screens[UI_PAGE_ALBUM] = ui_album_create();
+    s_on_show[UI_PAGE_ALBUM] = ui_album_on_show;
+    s_page_visible[UI_PAGE_ALBUM] = page_visible_when_configured;
+    s_screens[UI_PAGE_WEATHER] = ui_weather_create();
+    s_on_show[UI_PAGE_WEATHER] = ui_weather_on_show;
+    s_page_visible[UI_PAGE_WEATHER] = weather_page_visible;
+    s_screens[UI_PAGE_INFO] = ui_info_create();
+    s_on_show[UI_PAGE_INFO] = ui_info_on_show;
 
-    for (int i = 0; i < UI_PAGE_COUNT; i++) {
-        lv_obj_add_flag(s_screens[i], LV_OBJ_FLAG_CLICKABLE);
-        lv_obj_add_event_cb(s_screens[i], gesture_event_cb, LV_EVENT_GESTURE, NULL);
+    for (ui_page_t page = 0; page < UI_PAGE_COUNT; page++) {
+        lv_obj_add_flag(s_screens[page], LV_OBJ_FLAG_CLICKABLE);
+        /* lv_obj_create() screens are scrollable by default. None of our
+         * screens actually need to scroll, but LVGL still tries scrolling
+         * *before* gesture recognition on any drag - if it succeeds (even
+         * on a sub-pixel content overflow we didn't intend), indev_gesture()
+         * bails out early and no LV_EVENT_GESTURE ever fires, silently
+         * eating swipe-to-switch-screens while the auto-cycle timer (which
+         * calls ui_next_screen() directly, bypassing touch entirely) keeps
+         * working fine. Removing SCROLLABLE guarantees every drag reaches
+         * gesture recognition instead. */
+        lv_obj_remove_flag(s_screens[page], LV_OBJ_FLAG_SCROLLABLE);
+        lv_obj_add_event_cb(s_screens[page], gesture_event_cb, LV_EVENT_GESTURE, NULL);
     }
 
     /* Start on the first visible page rather than hardcoding index 0 - if
      * Wi-Fi isn't set up yet that's the setup screen, otherwise it's the
      * clock, same as before this screen existed. */
-    s_current = 0;
+    s_current = UI_PAGE_SETUP;
     for (int guard = 0; guard < UI_PAGE_COUNT && !page_is_visible(s_current); guard++) {
         s_current = wrap_index(s_current + 1);
     }

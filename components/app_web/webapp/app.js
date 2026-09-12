@@ -203,6 +203,10 @@
     $("chime").checked = !!currentConfig.chime_enabled;
     $("brightness").value = currentConfig.brightness;
     $("brightnessVal").textContent = currentConfig.brightness;
+    $("displayTheme").value = currentConfig.display_theme || "dark";
+    $("themeDayStart").value = currentConfig.theme_day_start || "07:00";
+    $("themeNightStart").value = currentConfig.theme_night_start || "20:00";
+    updateThemeAutoRows();
     $("autoCycle").checked = !!currentConfig.auto_cycle_enabled;
     $("cycleSeconds").value = currentConfig.cycle_seconds;
     $("audioMuted").checked = !!currentConfig.audio_muted;
@@ -228,6 +232,13 @@
     $("brightnessVal").textContent = this.value;
   });
 
+  function updateThemeAutoRows() {
+    var isAuto = $("displayTheme").value === "auto";
+    $("themeDayRow").hidden = !isAuto;
+    $("themeNightRow").hidden = !isAuto;
+  }
+  $("displayTheme").addEventListener("change", updateThemeAutoRows);
+
   $("btnSaveClock").addEventListener("click", function () {
     var tzSelected = $("tzOffset").value;
     var tzPosix = tzSelected === TZ_CUSTOM ? $("tzCustom").value.trim() : tzSelected;
@@ -242,6 +253,9 @@
   $("btnSaveDisplay").addEventListener("click", function () {
     saveConfig({
       brightness: parseInt($("brightness").value, 10),
+      display_theme: $("displayTheme").value,
+      theme_day_start: $("themeDayStart").value,
+      theme_night_start: $("themeNightStart").value,
       auto_cycle_enabled: $("autoCycle").checked,
       cycle_seconds: parseInt($("cycleSeconds").value, 10),
       audio_muted: $("audioMuted").checked,

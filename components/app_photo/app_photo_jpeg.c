@@ -13,6 +13,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include "esp_log.h"
+#include "esp_heap_caps.h"
 #include "jpeg_decoder.h"
 
 #include "app_photo_internal.h"
@@ -34,7 +35,12 @@ esp_err_t app_photo_jpeg_decode_native(const char *path, uint16_t target_w, uint
         return ESP_FAIL;
     }
 
-    uint8_t *jpg_data = malloc(fsize);
+    /* Both the raw file buffer and (below) the decoded RGB565 buffer scale
+     * with image size and can reach into the megabytes - PSRAM has room for
+     * that, the ~400KB of internal DRAM left over after LVGL/Wi-Fi/lwIP does
+     * not, so ask for it explicitly rather than let the general allocator
+     * pick. */
+    uint8_t *jpg_data = heap_caps_malloc(fsize, MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT);
     if (!jpg_data) {
         fclose(f);
         return ESP_ERR_NO_MEM;
@@ -102,7 +108,7 @@ esp_err_t app_photo_jpeg_decode_native(const char *path, uint16_t target_w, uint
         return ESP_ERR_NO_MEM;
     }
 
-    uint16_t *pixels = malloc(out_size);
+    uint16_t *pixels = heap_caps_malloc(out_size, MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT);
     if (!pixels) {
         free(jpg_data);
         return ESP_ERR_NO_MEM;

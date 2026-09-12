@@ -4,6 +4,9 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>WT32</title>
+<!-- Inline SVG - a small clock face matching the page's accent color - so
+     there's a tab icon with no extra asset to embed/serve. -->
+<link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='6' fill='%230b0f1a'/%3E%3Ccircle cx='16' cy='16' r='10' fill='none' stroke='%2300e5ff' stroke-width='2.5'/%3E%3Cpath d='M16 16 L16 9' stroke='%2300e5ff' stroke-width='2.5' stroke-linecap='round'/%3E%3Cpath d='M16 16 L21 18' stroke='%2300e5ff' stroke-width='2.5' stroke-linecap='round'/%3E%3C/svg%3E">
 <link rel="stylesheet" href="/style.css">
 </head>
 <body>
@@ -86,6 +89,15 @@
       <label>Brightness <span id="brightnessVal">80</span>%
         <input type="range" id="brightness" min="5" max="100" value="80">
       </label>
+      <label>Theme
+        <select id="displayTheme">
+          <option value="dark">Dark</option>
+          <option value="light">Light</option>
+          <option value="auto">Auto (based on time of day)</option>
+        </select>
+      </label>
+      <label id="themeDayRow" hidden>Switch to light at<input type="time" id="themeDayStart"></label>
+      <label id="themeNightRow" hidden>Switch to dark at<input type="time" id="themeNightStart"></label>
       <label class="switch-row"><input type="checkbox" id="autoCycle"> Auto-cycle through screens</label>
       <label>Seconds per screen<input type="number" id="cycleSeconds" min="3" max="120"></label>
       <label class="switch-row"><input type="checkbox" id="audioMuted"> Mute speaker</label>
