@@ -4,11 +4,12 @@
  * Opts: --font weathericons-regular-webfont.ttf -r 0xf00d,0xf00c,0xf086,0xf002,0xf031,0xf07d,0xf07e,0xf008,0xf036,0xf009,0xf037,0xf010,0xf03b,0xf00a,0xf038,0xf003,0xf04a,0xf051,0xf052,0xf050,0xf07a,0xf02e --size 64 --bpp 4 --format lvgl --lv-font-name font_weather_icons_64 -o font_weather_icons_64.c
  ******************************************************************************/
 
-#ifdef LV_LVGL_H_INCLUDE_SIMPLE
+/* lv_font_conv's template picks between "lvgl.h" and "lvgl/lvgl.h" based on
+ * LV_LVGL_H_INCLUDE_SIMPLE, which nothing in this project defines - just
+ * include it directly, same as every other file here (e.g. ui_internal.h,
+ * ui_weather_icons.h) that relies on the lvgl component's own include path
+ * putting "lvgl.h" within reach. */
 #include "lvgl.h"
-#else
-#include "lvgl/lvgl.h"
-#endif
 
 #ifndef FONT_WEATHER_ICONS_64
 #define FONT_WEATHER_ICONS_64 1
