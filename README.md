@@ -5,7 +5,9 @@ A small, self-hosted **desk clock / digital photo frame** firmware for the
 480x320 touch LCD), written in plain C on top of ESP-IDF and LVGL. Swipe
 between a clock, a photo slideshow from a microSD card, a weather screen, and
 a device-info screen, all configured from a phone or laptop through a
-built-in web page - no app, no cloud account.
+built-in web page - no app, no cloud account. Before Wi-Fi is set up, a QR
+code screen stands in for the clock/album/weather screens so first-time
+setup is just a camera scan away.
 
 > 한국어 안내는 [README.ko.md](README.ko.md) 를 참고하세요.
 
@@ -24,6 +26,11 @@ built-in web page - no app, no cloud account.
   font. Shows the last known reading (marked stale) if a fetch fails, rather
   than blanking on a transient network hiccup. Optional - stays hidden from
   the swipe rotation until an API key and city ID are set.
+- **Wi-Fi setup screen** - shown automatically in place of the clock/album/
+  weather screens until Wi-Fi is configured: a QR code for the fallback
+  SoftAP (scan it with a phone's camera to join instantly, no typing) plus
+  the SSID/password as plain text. Drops out of rotation the moment the
+  device joins a network.
 - **Device info screen** - IP address, Wi-Fi signal, SD card status, uptime,
   free heap, firmware version.
 - **Swipe navigation** between screens, plus an optional auto-cycle timer.
@@ -104,14 +111,17 @@ The component manager will fetch the managed dependencies
 ## First boot / configuration
 
 1. Flash the firmware and power the board.
-2. The Info screen (swipe to it) shows a SoftAP name like `WT32-A1B2C3`
-   (the last 3 octets of its MAC address) with **no password** (open
-   network) by default. Connect a phone or laptop to it (most phones will
-   pop up a captive-portal prompt automatically; otherwise open
-   `http://192.168.4.1/`).
+2. Until Wi-Fi is configured, the display shows only two screens - swipe
+   between them: a **setup screen** with a QR code for the fallback SoftAP
+   (scan it with a phone's camera to join instantly, no typing needed) and
+   the device-info screen. The SoftAP name looks like `WT32-A1B2C3` (the
+   last 3 octets of its MAC address) and has **no password** (open network)
+   by default. Joining pops up a captive-portal prompt on most phones
+   automatically; otherwise open `http://192.168.4.1/` manually.
 3. Open the **Wi-Fi** tab, scan, pick your network, enter its password and
-   press *Connect*. On success the device joins your network and the
-   settings persist across reboots.
+   press *Connect*. On success the device joins your network, the settings
+   persist across reboots, and the clock/album/weather screens replace the
+   setup screen in the swipe rotation.
 4. The SoftAP itself stays available at all times as a fallback, so the web
    UI is always reachable even if the home network is down - either via the
    AP (browse to `http://192.168.4.1/` manually) or via `http://<device-ip>/`
@@ -229,9 +239,10 @@ components/
   app_weather/         OpenWeatherMap current-conditions polling
   app_web/             REST API + embedded HTML5/CSS/JS config page
   app_ota/             manual/GitHub firmware updates + identity validation
-  ui/                  LVGL screens (clock / album / weather / info) +
-                       navigation; weather condition icons are a bitmap font
-                       generated (lv_font_conv) from Weather Icons
+  ui/                  LVGL screens (Wi-Fi setup QR / clock / album /
+                       weather / info) + navigation; weather condition icons
+                       are a bitmap font generated (lv_font_conv) from
+                       Weather Icons
 ```
 
 ## Known limitations / roadmap
