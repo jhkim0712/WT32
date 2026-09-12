@@ -8,6 +8,7 @@ idf_component_register(
         "ui_weather_icons.c"
         "font_weather_icons_64.c"
         "ui_info.c"
+        "ui_setup.c"
     INCLUDE_DIRS "include"
     PRIV_INCLUDE_DIRS "."
     REQUIRES

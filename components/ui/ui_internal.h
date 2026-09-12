@@ -22,3 +22,8 @@ bool ui_weather_is_visible(void);
 
 lv_obj_t *ui_info_create(void);
 void ui_info_on_show(void);
+
+lv_obj_t *ui_setup_create(void);
+void ui_setup_on_show(void);
+/** @return true if Wi-Fi hasn't been configured yet (first-time setup). */
+bool ui_setup_is_visible(void);

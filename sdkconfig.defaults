@@ -71,6 +71,8 @@ CONFIG_LV_FONT_DEFAULT_MONTSERRAT_16=y
 # font_weather_icons_64.c) - needs this to actually decode them at draw
 # time, or the glyphs silently draw as nothing (label just looks empty).
 CONFIG_LV_USE_FONT_COMPRESSED=y
+# Renders the SoftAP QR code on the first-time setup screen (ui_setup.c).
+CONFIG_LV_USE_QRCODE=y
 
 #
 # Logging
