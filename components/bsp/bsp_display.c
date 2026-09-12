@@ -267,7 +267,15 @@ lv_display_t *bsp_display_start(void)
 
     const esp_lcd_panel_dev_config_t panel_config = {
         .reset_gpio_num = BSP_LCD_PIN_RST,
-        .rgb_ele_order = LCD_RGB_ELEMENT_ORDER_RGB,
+        /* This panel's glass is wired BGR, not RGB - with RGB set here,
+         * every color came out with red and blue swapped (most visibly:
+         * the clock screen's cyan (0x00e5ff, low red/high blue) rendered
+         * as yellow (high red/low blue) - a clean R/B swap, consistent
+         * across every screen and the photo album alike, not something
+         * specific to any one decoder). This is the single, correct place
+         * to fix that: the panel driver's color order, not a per-pixel
+         * workaround in each image decoder. */
+        .rgb_ele_order = LCD_RGB_ELEMENT_ORDER_BGR,
         .bits_per_pixel = BSP_LCD_BITS_PER_PIXEL,
     };
     esp_lcd_panel_handle_t panel_handle = NULL;

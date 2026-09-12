@@ -147,6 +147,17 @@ esp_err_t app_photo_decode_to_canvas(size_t index, uint16_t canvas_w, uint16_t c
         return ret;
     }
 
+    if (native_w == canvas_w && native_h == canvas_h) {
+        /* Already exactly the panel's resolution (the README's own advice
+         * for "best quality") - use the decoded buffer as-is instead of
+         * allocating a second one just to copy it into. Skipping that
+         * second buffer matters on this board: PSRAM is tight enough that
+         * needing both at once could fail with ESP_ERR_NO_MEM right here
+         * even though decoding itself just succeeded. */
+        *out_buf = native;
+        return ESP_OK;
+    }
+
     uint16_t *scaled = app_photo_resize_rgb565(native, native_w, native_h, canvas_w, canvas_h);
     free(native);
     if (!scaled) {

@@ -232,6 +232,11 @@ needs a rebuild + reflash to try, no wiring changes:
   the opposite WR edge).
 - **Colors look inverted/wrong but shapes are fine** - flip the `true` in
   `esp_lcd_panel_invert_color(panel_handle, true)`.
+- **Colors look like specific hues swapped (e.g. the clock's cyan renders
+  yellow) rather than a full negative** - that's red and blue channels
+  swapped, not inverted; flip `rgb_ele_order` between
+  `LCD_RGB_ELEMENT_ORDER_RGB` and `LCD_RGB_ELEMENT_ORDER_BGR` (some panel
+  batches wire the glass the other way around).
 - **Image is mirrored, rotated, or shifted** - adjust the
   `esp_lcd_panel_swap_xy()` / `esp_lcd_panel_mirror()` calls right below it.
 - **Backlight comes on but nothing is drawn at all** - check the serial
