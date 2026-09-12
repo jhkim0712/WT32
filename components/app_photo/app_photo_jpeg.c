@@ -42,6 +42,8 @@ esp_err_t app_photo_jpeg_decode_native(const char *path, uint16_t target_w, uint
      * pick. */
     uint8_t *jpg_data = heap_caps_malloc(fsize, MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT);
     if (!jpg_data) {
+        ESP_LOGW(TAG, "%s: out of PSRAM reading %ld-byte file (%u free)", path, fsize,
+                 (unsigned)heap_caps_get_free_size(MALLOC_CAP_SPIRAM));
         fclose(f);
         return ESP_ERR_NO_MEM;
     }
@@ -110,6 +112,8 @@ esp_err_t app_photo_jpeg_decode_native(const char *path, uint16_t target_w, uint
 
     uint16_t *pixels = heap_caps_malloc(out_size, MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT);
     if (!pixels) {
+        ESP_LOGW(TAG, "%s: out of PSRAM decoding %dx%d (%u bytes needed, %u free)", path, out_img.width,
+                 out_img.height, (unsigned)out_size, (unsigned)heap_caps_get_free_size(MALLOC_CAP_SPIRAM));
         free(jpg_data);
         return ESP_ERR_NO_MEM;
     }

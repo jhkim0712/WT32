@@ -116,12 +116,24 @@ static void show_index(size_t idx)
     lv_gif_pause(s_gif);
     lv_obj_add_flag(s_gif, LV_OBJ_FLAG_HIDDEN);
 
+    /* Free the *previous* photo's ~300KB canvas buffer before decoding the
+     * next one, not after - PSRAM is tight enough on this board (LVGL's own
+     * full-frame double buffer alone already holds ~600KB of it) that a
+     * decode which would otherwise fit can fail with ESP_ERR_NO_MEM just
+     * because the old buffer was still also alive at the same time. Detach
+     * s_img from it first, same as the count==0 case above, so nothing can
+     * end up reading freed memory through the still-set image source in the
+     * meantime (see that branch's comment) - if the decode below fails,
+     * s_img is left hidden rather than showing a stale/dangling frame. */
+    lv_image_set_src(s_img, NULL);
+    free_current_buf();
+
     uint16_t *buf = NULL;
     if (app_photo_decode_to_canvas(idx, BSP_LCD_H_RES, BSP_LCD_V_RES, &buf) != ESP_OK) {
+        lv_obj_add_flag(s_img, LV_OBJ_FLAG_HIDDEN);
         return;
     }
 
-    free_current_buf();
     s_pixel_buf = buf;
 
     s_img_dsc.header.w = BSP_LCD_H_RES;

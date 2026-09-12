@@ -219,6 +219,19 @@
     <div class="card">
       <h2>System</h2>
       <label>Device hostname<input type="text" id="hostname" placeholder="wt32"></label>
+      <label>Log level
+        <select id="logLevel">
+          <option value="none">None</option>
+          <option value="error">Error</option>
+          <option value="warn">Warning</option>
+          <option value="info">Info</option>
+          <option value="debug">Debug</option>
+          <option value="verbose">Verbose</option>
+        </select>
+      </label>
+      <p class="hint">Controls how much detail shows up on the device's serial console -
+        raise it to <code>Debug</code>/<code>Verbose</code> when troubleshooting, back to
+        <code>Info</code> otherwise.</p>
       <div class="row"><button id="btnSaveSystem" class="btn primary">Save</button><span id="systemMsg" class="msg"></span></div>
       <hr>
       <h3>Fallback access point</h3>

@@ -42,6 +42,10 @@ void app_main(void)
 
     app_config_load();
     app_config_t *cfg = app_config_get();
+    /* Applied this early so it covers as much of the rest of boot as
+     * possible - later changes from the web UI's System tab take effect
+     * immediately via the same call (see app_web.c's config_post_handler). */
+    esp_log_level_set("*", (esp_log_level_t)cfg->log_level);
 
     ESP_LOGI(TAG, "Starting display...");
     bsp_display_start();

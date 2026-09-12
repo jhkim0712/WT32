@@ -47,6 +47,8 @@ setup is just a camera scan away.
   - Photo album interval/shuffle.
   - Weather: OpenWeatherMap API key + city ID, enable/disable the screen.
   - Hostname, restart, factory reset, fallback AP password.
+  - Serial console log level (None through Verbose, default Info) - takes
+    effect immediately, no reflash needed.
   - **File manager**: browse, upload, download/view, rename and delete
     anything on the microSD card, right from the browser (no separate app
     needed to load photos onto it) - plus a one-click **format** to fully

@@ -36,6 +36,7 @@ static const char *NVS_NAMESPACE = "wt32cfg";
 #define KEY_AUD_MUTED    "aud_mute"
 #define KEY_GH_REPO      "gh_repo"
 #define KEY_FIRST_BOOT   "first_boot"
+#define KEY_LOG_LEVEL    "log_level"
 
 static app_config_t s_cfg;
 
@@ -73,6 +74,8 @@ void app_config_reset_defaults(app_config_t *cfg)
     cfg->github_repo[0] = '\0'; /* e.g. "yourname/wt32" - set from the web UI's Firmware tab */
 
     cfg->first_boot_done = false;
+
+    cfg->log_level = APP_LOG_LEVEL_INFO; /* matches sdkconfig.defaults' CONFIG_LOG_DEFAULT_LEVEL_INFO */
 }
 
 /* --- small per-type helpers: leave *out untouched (i.e. keep whatever
@@ -160,6 +163,11 @@ esp_err_t app_config_load(void)
     load_str(handle, KEY_GH_REPO, s_cfg.github_repo, sizeof(s_cfg.github_repo));
 
     load_bool(handle, KEY_FIRST_BOOT, &s_cfg.first_boot_done);
+    {
+        uint8_t level = (uint8_t)s_cfg.log_level;
+        load_u8(handle, KEY_LOG_LEVEL, &level);
+        s_cfg.log_level = (app_log_level_t)level;
+    }
 
     nvs_close(handle);
     ESP_LOGI(TAG, "Config loaded from NVS (host=%s)", s_cfg.hostname);
@@ -212,6 +220,7 @@ esp_err_t app_config_save(void)
     CHECK(nvs_set_str(handle, KEY_GH_REPO, s_cfg.github_repo));
 
     CHECK(nvs_set_u8(handle, KEY_FIRST_BOOT, s_cfg.first_boot_done ? 1 : 0));
+    CHECK(nvs_set_u8(handle, KEY_LOG_LEVEL, (uint8_t)s_cfg.log_level));
 #undef CHECK
 
     ret = nvs_commit(handle);

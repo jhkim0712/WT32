@@ -39,6 +39,20 @@ typedef enum {
     DISPLAY_THEME_AUTO  = 2,
 } display_theme_t;
 
+/* Deliberately numbered to match esp_log.h's esp_log_level_t exactly
+ * (ESP_LOG_NONE=0 .. ESP_LOG_VERBOSE=5), so applying a stored value is a
+ * plain cast - see app_web.c's config_post_handler and main.c. Defined here
+ * instead of just using esp_log_level_t so app_config.h doesn't need to
+ * pull in esp_log.h for every file that already includes it. */
+typedef enum {
+    APP_LOG_LEVEL_NONE    = 0,
+    APP_LOG_LEVEL_ERROR   = 1,
+    APP_LOG_LEVEL_WARN    = 2,
+    APP_LOG_LEVEL_INFO    = 3,
+    APP_LOG_LEVEL_DEBUG   = 4,
+    APP_LOG_LEVEL_VERBOSE = 5,
+} app_log_level_t;
+
 typedef struct {
     /* --- Wi-Fi / network --- */
     char     wifi_ssid[APP_CFG_SSID_MAX_LEN];
@@ -87,6 +101,7 @@ typedef struct {
 
     /* --- Misc --- */
     bool     first_boot_done;
+    app_log_level_t log_level; /* global esp_log verbosity, applied via esp_log_level_set("*", ...) */
 } app_config_t;
 
 /** Load config from NVS (per-key); any key not yet stored keeps its default. */

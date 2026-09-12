@@ -215,6 +215,28 @@ static const char *display_theme_to_str(display_theme_t t)
     }
 }
 
+static const char *log_level_to_str(app_log_level_t l)
+{
+    switch (l) {
+        case APP_LOG_LEVEL_NONE:    return "none";
+        case APP_LOG_LEVEL_ERROR:   return "error";
+        case APP_LOG_LEVEL_WARN:    return "warn";
+        case APP_LOG_LEVEL_DEBUG:   return "debug";
+        case APP_LOG_LEVEL_VERBOSE: return "verbose";
+        default:                    return "info";
+    }
+}
+
+static app_log_level_t log_level_from_str(const char *s)
+{
+    if (strcmp(s, "none") == 0)    return APP_LOG_LEVEL_NONE;
+    if (strcmp(s, "error") == 0)   return APP_LOG_LEVEL_ERROR;
+    if (strcmp(s, "warn") == 0)    return APP_LOG_LEVEL_WARN;
+    if (strcmp(s, "debug") == 0)   return APP_LOG_LEVEL_DEBUG;
+    if (strcmp(s, "verbose") == 0) return APP_LOG_LEVEL_VERBOSE;
+    return APP_LOG_LEVEL_INFO;
+}
+
 static esp_err_t config_get_handler(httpd_req_t *req)
 {
     app_config_t *cfg = app_config_get();
@@ -240,6 +262,7 @@ static esp_err_t config_get_handler(httpd_req_t *req)
     cJSON_AddStringToObject(root, "weather_city_id", cfg->weather_city_id);
     cJSON_AddBoolToObject(root, "audio_muted", cfg->audio_muted);
     cJSON_AddStringToObject(root, "github_repo", cfg->github_repo);
+    cJSON_AddStringToObject(root, "log_level", log_level_to_str(cfg->log_level));
 
     return send_json(req, root);
 }
@@ -336,6 +359,10 @@ static esp_err_t config_post_handler(httpd_req_t *req)
     }
     if ((item = cJSON_GetObjectItem(root, "github_repo")) && cJSON_IsString(item)) {
         strncpy(cfg->github_repo, item->valuestring, sizeof(cfg->github_repo) - 1);
+    }
+    if ((item = cJSON_GetObjectItem(root, "log_level")) && cJSON_IsString(item)) {
+        cfg->log_level = log_level_from_str(item->valuestring);
+        esp_log_level_set("*", (esp_log_level_t)cfg->log_level);
     }
 
     cJSON_Delete(root);
