@@ -142,7 +142,7 @@
   </section>
 
   <section id="panel-files" class="panel">
-    <div class="card">
+    <div class="card" id="filesDropZone">
       <h2>SD card files</h2>
       <div class="row" id="filesBreadcrumb"></div>
 
@@ -153,12 +153,14 @@
 
       <hr>
       <div class="row">
-        <input type="file" id="filesUploadInput">
+        <input type="file" id="filesUploadInput" multiple>
         <button id="btnFilesUpload" class="btn primary">Upload here</button>
       </div>
+      <p class="hint">Pick multiple files at once, or drag and drop them anywhere in this box - they upload to the current folder.</p>
       <div class="progress" id="filesUploadProgressWrap" hidden>
         <div class="progress-bar" id="filesUploadProgressBar"></div>
       </div>
+      <span id="filesUploadQueueMsg" class="msg"></span>
       <div class="row">
         <input type="text" id="filesNewFolderName" placeholder="New folder name">
         <button id="btnFilesMkdir" class="btn">Create folder</button>
