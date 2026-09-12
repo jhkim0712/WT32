@@ -87,3 +87,18 @@ bool bsp_sdcard_is_mounted(void)
 {
     return s_mounted;
 }
+
+esp_err_t bsp_sdcard_format(void)
+{
+    if (!s_mounted) {
+        return ESP_ERR_INVALID_STATE;
+    }
+    /* Formats in place and remounts at BSP_SD_MOUNT_POINT before returning -
+     * s_card/s_mounted stay valid either way (untouched on failure, still
+     * the freshly-remounted card on success). */
+    esp_err_t ret = esp_vfs_fat_sdcard_format(BSP_SD_MOUNT_POINT, s_card);
+    if (ret != ESP_OK) {
+        ESP_LOGE(TAG, "Format failed: %s", esp_err_to_name(ret));
+    }
+    return ret;
+}

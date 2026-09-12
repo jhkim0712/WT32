@@ -3,8 +3,9 @@
 [WT32-SC01 Plus](docs/WT32-SC01-PLUS_Datasheet-V1.9+EN.pdf) (ESP32-S3 + 3.5인치
 480x320 터치 LCD) 보드용 **탁상시계 / 디지털 액자** 펌웨어입니다. ESP-IDF와
 LVGL 위에서 순수 C 언어로 작성되었으며, 시계 화면, microSD 카드 기반 사진
-슬라이드쇼, 기기 정보 화면을 스와이프로 전환할 수 있고, 별도 앱이나 클라우드
-계정 없이 기기 자체가 제공하는 웹 페이지로 모든 설정을 마칠 수 있습니다.
+슬라이드쇼, 날씨 화면, 기기 정보 화면을 스와이프로 전환할 수 있고, 별도 앱이나
+클라우드 계정 없이 기기 자체가 제공하는 웹 페이지로 모든 설정을 마칠 수
+있습니다.
 
 > English documentation: [README.md](README.md)
 
@@ -14,6 +15,11 @@ LVGL 위에서 순수 C 언어로 작성되었으며, 시계 화면, microSD 카
 - **전자앨범** - microSD 카드의 `.bmp` / `.jpg` / `.png` 이미지를
   슬라이드쇼로 재생, 스와이프/탭으로 다음 사진 전환, 재생 간격과 셔플 여부
   설정 가능.
+- **날씨 화면** - OpenWeatherMap의 현재 날씨(기온, 상태 설명, 습도, 풍속)를
+  표시하며, 낮/밤에 따라 [Weather Icons](https://github.com/erikflowers/weather-icons)
+  폰트에서 가져온 아이콘이 함께 표시됩니다. 조회가 실패해도 마지막으로 받은
+  값을 (오래된 값이라고 표시하며) 계속 보여줍니다. 선택 기능이며, API 키와
+  도시 ID를 설정하기 전까지는 스와이프 화면 목록에서 숨겨집니다.
 - **기기 정보 화면** - IP 주소, Wi-Fi 신호, SD 카드 상태, 가동 시간, 여유 힙,
   펌웨어 버전.
 - 화면 간 **스와이프 전환** + 선택적 자동 순환.
@@ -23,10 +29,12 @@ LVGL 위에서 순수 C 언어로 작성되었으며, 시계 화면, microSD 카
   - 시간대(POSIX TZ 문자열), NTP 서버, 12/24시간 표시, 정시 알림음.
   - 밝기, 자동 순환, 음소거.
   - 전자앨범 재생 간격/셔플.
+  - 날씨: OpenWeatherMap API 키 + 도시 ID, 화면 켜기/끄기.
   - 호스트명, 재시작, 공장 초기화, 폴백 AP 비밀번호 설정.
   - **파일 관리자**: 브라우저에서 바로 microSD 카드의 파일을 탐색, 업로드,
     다운로드/보기, 이름변경, 삭제할 수 있습니다 (사진을 넣기 위해 별도
-    앱이 필요 없습니다).
+    앱이 필요 없습니다). 카드를 완전히 지워야 할 때를 위한 원클릭 **포맷**
+    기능도 있습니다.
   - **펌웨어 업데이트**: `.bin` 파일을 직접 업로드하거나, GitHub 저장소의
     릴리즈를 확인해 한 번의 클릭으로 설치 - [펌웨어 업데이트](#펌웨어-업데이트)
     참고.
@@ -209,9 +217,12 @@ components/
   app_wifi/            SoftAP + STA Wi-Fi 매니저, 캡티브 포털 DNS, mDNS
   app_time/            시간대 + SNTP
   app_photo/           SD 카드 스캔 + BMP/JPEG 디코딩 + 리사이즈
+  app_weather/         OpenWeatherMap 현재 날씨 폴링
   app_web/             REST API + 내장 HTML5/CSS/JS 설정 페이지
   app_ota/             수동/GitHub 펌웨어 업데이트 + 신원 검증
-  ui/                  LVGL 화면 (시계/앨범/정보) + 화면 전환
+  ui/                  LVGL 화면 (시계/앨범/날씨/정보) + 화면 전환; 날씨
+                       상태 아이콘은 Weather Icons에서 lv_font_conv로
+                       생성한 비트맵 폰트
 ```
 
 ## 알려진 한계 / 로드맵
@@ -230,8 +241,8 @@ components/
   이름의 에셋만 찾고, 없으면 첫 번째 `.bin` 파일을 사용합니다. 릴리즈에
   여러 보드용 바이너리가 함께 있다면 `firmware.bin` 이 이 보드용 파일이
   되도록 이름을 맞춰주세요 (또는 저장소별로 에셋명을 조정하세요).
-- 추가 아이디어 환영: 날씨 화면, SD 카드 MP3/오디오 재생, 알람, 추가 시계
-  화면, GIF 재생.
+- 추가 아이디어 환영: SD 카드 MP3/오디오 재생, 알람, 추가 시계 화면, GIF
+  재생.
 
 ## 보안 참고사항
 
@@ -251,3 +262,9 @@ components/
 
 MIT - [LICENSE](LICENSE) 참고. `docs/` 폴더의 제조사 데이터시트는 참고용으로
 포함된 것이며, 저작권은 Wireless-Tag Technology Co., Limited 에 있습니다.
+날씨 상태 아이콘은 Erik Flowers의
+[Weather Icons](https://github.com/erikflowers/weather-icons) 폰트(SIL OFL
+1.1)에서 일부만 골라 변환한 것입니다 - 정확히 어떤 글리프를 어떻게
+변환했는지는
+[`components/ui/ui_weather_icons.c`](components/ui/ui_weather_icons.c)를
+참고하세요.

@@ -23,6 +23,10 @@ static void show_index(size_t idx)
 {
     size_t count = app_photo_count();
     if (count == 0) {
+        /* s_img_dsc.data may point at s_pixel_buf - clear the source before
+         * freeing it so nothing can end up reading freed memory through it. */
+        lv_image_set_src(s_img, NULL);
+        free_current_buf();
         lv_obj_add_flag(s_img, LV_OBJ_FLAG_HIDDEN);
         lv_obj_clear_flag(s_empty_label, LV_OBJ_FLAG_HIDDEN);
         return;
@@ -56,17 +60,18 @@ static void show_index(size_t idx)
 static void advance_cb(lv_timer_t *t)
 {
     (void)t;
-    if (app_photo_count() > 0) {
-        show_index(s_index + 1);
-    }
+    /* Not guarded on app_photo_count() > 0: show_index() already handles the
+     * zero case (hides the image, shows the "no photos" label) - it needs
+     * to run even when the count just dropped to 0 (e.g. an SD card format
+     * from the web UI while this screen was already showing a photo),
+     * otherwise the last-decoded photo would stay on screen forever. */
+    show_index(s_index + 1);
 }
 
 static void tap_cb(lv_event_t *e)
 {
     (void)e;
-    if (app_photo_count() > 0) {
-        show_index(s_index + 1);
-    }
+    show_index(s_index + 1);
 }
 
 lv_obj_t *ui_album_create(void)

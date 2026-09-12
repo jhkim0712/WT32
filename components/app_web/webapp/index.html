@@ -21,6 +21,7 @@
   <button class="tab" data-tab="clock">Clock</button>
   <button class="tab" data-tab="display">Display</button>
   <button class="tab" data-tab="album">Album</button>
+  <button class="tab" data-tab="weather">Weather</button>
   <button class="tab" data-tab="files">Files</button>
   <button class="tab" data-tab="firmware">Firmware</button>
   <button class="tab" data-tab="system">System</button>
@@ -62,11 +63,16 @@
   <section id="panel-clock" class="panel">
     <div class="card">
       <h2>Clock</h2>
-      <label>Timezone (POSIX TZ string)
-        <input type="text" id="tz" placeholder="e.g. KST-9 or PST8PDT,M3.2.0,M11.1.0">
+      <label>Timezone (UTC offset)
+        <select id="tzOffset"></select>
       </label>
-      <p class="hint">Common: UTC0, KST-9 (Korea), JST-9 (Japan), CST-8 (China),
-        EST5EDT (US East, DST), PST8PDT (US West, DST), CET-1CEST,M3.5.0,M10.5.0/3 (EU).</p>
+      <label id="tzCustomRow" hidden>Custom POSIX TZ string
+        <input type="text" id="tzCustom" placeholder="e.g. PST8PDT,M3.2.0,M11.1.0">
+      </label>
+      <p class="hint">Pick the UTC offset for your area - it's converted to the POSIX format the
+        device needs automatically. Daylight saving isn't applied on its own, so switch offsets
+        manually when it starts/ends, or pick "Custom" for a POSIX rule that handles it (e.g.
+        <code>PST8PDT,M3.2.0,M11.1.0</code> for US Pacific, <code>CET-1CEST,M3.5.0,M10.5.0/3</code> for EU).</p>
       <label>NTP server<input type="text" id="ntp"></label>
       <label class="switch-row"><input type="checkbox" id="time24h"> 24-hour clock</label>
       <label class="switch-row"><input type="checkbox" id="chime"> Hourly chime</label>
@@ -99,6 +105,30 @@
     </div>
   </section>
 
+  <section id="panel-weather" class="panel">
+    <div class="card">
+      <h2>Weather</h2>
+      <label class="switch-row"><input type="checkbox" id="weatherEnabled"> Show a weather screen in the slideshow</label>
+      <p class="hint">Uses <a href="https://openweathermap.org/api" target="_blank" rel="noopener">OpenWeatherMap</a>'s
+        free Current Weather API. Sign up for an API key, then look up your city's numeric ID
+        with their <a href="https://openweathermap.org/find" target="_blank" rel="noopener">city search</a>
+        (the ID is in that page's URL, e.g. <code>...&amp;id=1835848</code> for Seoul).</p>
+      <label>API key<input type="password" id="weatherApiKey" placeholder="OpenWeatherMap API key" autocomplete="off"></label>
+      <label>City ID<input type="text" id="weatherCityId" placeholder="e.g. 1835848" inputmode="numeric"></label>
+      <div class="row"><button id="btnSaveWeather" class="btn primary">Save</button><span id="weatherMsg" class="msg"></span></div>
+
+      <hr>
+      <div class="grid2">
+        <div><span class="label">Status</span><span class="value" id="wxStatus">-</span></div>
+        <div><span class="label">Location</span><span class="value" id="wxCity">-</span></div>
+        <div><span class="label">Temperature</span><span class="value" id="wxTemp">-</span></div>
+        <div><span class="label">Conditions</span><span class="value" id="wxDesc">-</span></div>
+        <div><span class="label">Humidity</span><span class="value" id="wxHumidity">-</span></div>
+        <div><span class="label">Wind</span><span class="value" id="wxWind">-</span></div>
+      </div>
+    </div>
+  </section>
+
   <section id="panel-files" class="panel">
     <div class="card">
       <h2>SD card files</h2>
@@ -122,6 +152,13 @@
         <button id="btnFilesMkdir" class="btn">Create folder</button>
       </div>
       <span id="filesMsg" class="msg"></span>
+
+      <hr>
+      <h2>Format SD card</h2>
+      <p class="hint">Erases everything on the microSD card and reformats it as FAT.
+        This deletes all photos and files - it can't be undone.</p>
+      <button id="btnSdFormat" class="btn danger">Format SD card</button>
+      <span id="sdFormatMsg" class="msg"></span>
     </div>
   </section>
 

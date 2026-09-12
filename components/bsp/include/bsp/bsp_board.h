@@ -43,6 +43,15 @@ esp_err_t bsp_sdcard_unmount(void);
 /** @return true if the microSD card is currently mounted. */
 bool bsp_sdcard_is_mounted(void);
 
+/**
+ * Erase and reformat the microSD card as FAT (wipes everything on it).
+ * The card must already be mounted (bsp_sdcard_mount() returned ESP_OK) -
+ * ESP-IDF formats it in place and remounts it at BSP_SD_MOUNT_POINT.
+ *
+ * @return ESP_OK on success, ESP_ERR_INVALID_STATE if not currently mounted.
+ */
+esp_err_t bsp_sdcard_format(void);
+
 /** Initialize the I2S audio output (amplifier feed). */
 esp_err_t bsp_audio_init(void);
 

@@ -27,6 +27,9 @@ static const char *NVS_NAMESPACE = "wt32cfg";
 #define KEY_CYCLE_SEC    "cyc_sec"
 #define KEY_ALB_INT      "alb_int"
 #define KEY_ALB_SHUFFLE  "alb_shuf"
+#define KEY_WTHR_EN      "wthr_en"
+#define KEY_WTHR_KEY     "wthr_key"
+#define KEY_WTHR_CITY    "wthr_city"
 #define KEY_AUD_MUTED    "aud_mute"
 #define KEY_GH_REPO      "gh_repo"
 #define KEY_FIRST_BOOT   "first_boot"
@@ -54,6 +57,10 @@ void app_config_reset_defaults(app_config_t *cfg)
 
     cfg->album_interval_s = 8;
     cfg->album_shuffle = false;
+
+    cfg->weather_enabled = false;
+    cfg->weather_api_key[0] = '\0';
+    cfg->weather_city_id[0] = '\0';
 
     cfg->audio_muted = false;
 
@@ -131,6 +138,10 @@ esp_err_t app_config_load(void)
     load_u16(handle, KEY_ALB_INT, &s_cfg.album_interval_s);
     load_bool(handle, KEY_ALB_SHUFFLE, &s_cfg.album_shuffle);
 
+    load_bool(handle, KEY_WTHR_EN, &s_cfg.weather_enabled);
+    load_str(handle, KEY_WTHR_KEY, s_cfg.weather_api_key, sizeof(s_cfg.weather_api_key));
+    load_str(handle, KEY_WTHR_CITY, s_cfg.weather_city_id, sizeof(s_cfg.weather_city_id));
+
     load_bool(handle, KEY_AUD_MUTED, &s_cfg.audio_muted);
 
     load_str(handle, KEY_GH_REPO, s_cfg.github_repo, sizeof(s_cfg.github_repo));
@@ -175,6 +186,10 @@ esp_err_t app_config_save(void)
 
     CHECK(nvs_set_u16(handle, KEY_ALB_INT, s_cfg.album_interval_s));
     CHECK(nvs_set_u8(handle, KEY_ALB_SHUFFLE, s_cfg.album_shuffle ? 1 : 0));
+
+    CHECK(nvs_set_u8(handle, KEY_WTHR_EN, s_cfg.weather_enabled ? 1 : 0));
+    CHECK(nvs_set_str(handle, KEY_WTHR_KEY, s_cfg.weather_api_key));
+    CHECK(nvs_set_str(handle, KEY_WTHR_CITY, s_cfg.weather_city_id));
 
     CHECK(nvs_set_u8(handle, KEY_AUD_MUTED, s_cfg.audio_muted ? 1 : 0));
 
