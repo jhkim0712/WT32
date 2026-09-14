@@ -74,7 +74,7 @@ static void screen_unloaded_cb(lv_event_t *e)
  * call this while it genuinely is). advance_cb() below is the one exception
  * that needs such a check, since its timer runs regardless of which screen
  * is on the panel - it does that check itself before calling this. */
-static void show_index(size_t idx)
+static void show_index_impl(size_t idx)
 {
     size_t count = app_photo_count();
     if (count == 0) {
@@ -171,6 +171,27 @@ static void show_index(size_t idx)
     lv_image_set_src(s_img, &s_img_dsc);
     lv_obj_clear_flag(s_img, LV_OBJ_FLAG_HIDDEN);
     lv_obj_add_flag(s_empty_label, LV_OBJ_FLAG_HIDDEN);
+}
+
+/* Thin wrapper around show_index_impl() that re-syncs s_timer's own schedule
+ * to "now" right after a slide actually finishes going up on screen.
+ *
+ * Without this, a slide's visible time gets shortchanged by however long its
+ * own decode/load took: LVGL's lv_timer_exec() stamps the timer's last_run
+ * *before* invoking advance_cb() (see managed_components/lvgl__lvgl's
+ * lv_timer.c), so that work counts against the interval before the slide is
+ * even on screen. Static photos decode fast enough for this to be in the
+ * noise, but a GIF's own load (open the file off the SD card, parse its
+ * header, allocate a native-resolution draw buffer, decode the first frame -
+ * see lv_gif.c's gif_initialize()) is slow enough that it was visibly eating
+ * into the slide's own display time, making the transition right after a GIF
+ * (and, to a lesser extent, into one) happen noticeably earlier than the
+ * configured interval. Resetting here instead makes every slide - GIF or
+ * not - get the full interval measured from when it actually appeared. */
+static void show_index(size_t idx)
+{
+    show_index_impl(idx);
+    lv_timer_reset(s_timer);
 }
 
 static void advance_cb(lv_timer_t *t)

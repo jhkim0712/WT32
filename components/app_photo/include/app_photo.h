@@ -32,7 +32,8 @@ extern "C" {
 
 #define APP_PHOTO_PATH_MAX 256
 
-/** (Re-)scan a directory on the SD card for supported image files. */
+/** (Re-)scan a directory on the SD card for supported image files, recursing
+ *  into any subdirectories it contains. */
 esp_err_t app_photo_scan(const char *dir_path);
 
 /** @return number of images found by the last app_photo_scan(). */
