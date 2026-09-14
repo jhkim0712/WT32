@@ -42,6 +42,10 @@ extern const uint8_t webapp_style_css_start[]  asm("_binary_style_css_start");
 extern const uint8_t webapp_style_css_end[]    asm("_binary_style_css_end");
 extern const uint8_t webapp_app_js_start[]     asm("_binary_app_js_start");
 extern const uint8_t webapp_app_js_end[]       asm("_binary_app_js_end");
+extern const uint8_t webapp_prepare_html_start[] asm("_binary_prepare_html_start");
+extern const uint8_t webapp_prepare_html_end[]   asm("_binary_prepare_html_end");
+extern const uint8_t webapp_prepare_js_start[]   asm("_binary_prepare_js_start");
+extern const uint8_t webapp_prepare_js_end[]     asm("_binary_prepare_js_end");
 
 /* ---------------------------------------------------------------------- */
 /* Helpers                                                                 */
@@ -148,6 +152,23 @@ static esp_err_t script_get_handler(httpd_req_t *req)
     httpd_resp_set_type(req, "application/javascript");
     return httpd_resp_send(req, (const char *)webapp_app_js_start,
                             webapp_app_js_end - webapp_app_js_start);
+}
+
+/* Standalone "crop/resize to 480x320 before uploading" page - linked from the
+ * Album and Files tabs rather than folded into the tab layout, since it's a
+ * one-off tool rather than a device setting. */
+static esp_err_t prepare_get_handler(httpd_req_t *req)
+{
+    httpd_resp_set_type(req, "text/html");
+    return httpd_resp_send(req, (const char *)webapp_prepare_html_start,
+                            webapp_prepare_html_end - webapp_prepare_html_start);
+}
+
+static esp_err_t prepare_script_get_handler(httpd_req_t *req)
+{
+    httpd_resp_set_type(req, "application/javascript");
+    return httpd_resp_send(req, (const char *)webapp_prepare_js_start,
+                            webapp_prepare_js_end - webapp_prepare_js_start);
 }
 
 /* index.html links an inline SVG favicon, but some browsers request
@@ -945,7 +966,7 @@ static esp_err_t captive_redirect_handler(httpd_req_t *req, httpd_err_code_t err
 esp_err_t app_web_start(void)
 {
     httpd_config_t config = HTTPD_DEFAULT_CONFIG();
-    config.max_uri_handlers = 28; /* routes[] below is at 24 - keep a few spare */
+    config.max_uri_handlers = 30; /* routes[] below is at 26 - keep a few spare */
     config.lru_purge_enable = true;
     config.uri_match_fn = httpd_uri_match_wildcard;
     config.stack_size = 8192; /* OTA writes + JSON parsing want a bit more than the 4KB default */
@@ -961,6 +982,8 @@ esp_err_t app_web_start(void)
         {.uri = "/",                          .method = HTTP_GET,  .handler = index_get_handler},
         {.uri = "/style.css",                 .method = HTTP_GET,  .handler = style_get_handler},
         {.uri = "/app.js",                    .method = HTTP_GET,  .handler = script_get_handler},
+        {.uri = "/prepare.html",              .method = HTTP_GET,  .handler = prepare_get_handler},
+        {.uri = "/prepare.js",                .method = HTTP_GET,  .handler = prepare_script_get_handler},
         {.uri = "/favicon.ico",               .method = HTTP_GET,  .handler = favicon_get_handler},
         {.uri = "/api/status",                .method = HTTP_GET,  .handler = status_get_handler},
         {.uri = "/api/config",                .method = HTTP_GET,  .handler = config_get_handler},
