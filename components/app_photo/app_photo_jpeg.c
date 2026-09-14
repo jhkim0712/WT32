@@ -62,7 +62,18 @@ esp_err_t app_photo_jpeg_decode_native(const char *path, uint16_t target_w, uint
         .out_format = JPEG_IMAGE_FORMAT_RGB565,
         .out_scale = JPEG_IMAGE_SCALE_0,
         .flags = {
-            .swap_color_bytes = 1, /* match LV_COLOR_16_SWAP in sdkconfig.defaults */
+            /* Leave the byte order alone here, same as the PNG/BMP decoders
+             * (app_photo_png.c/app_photo_bmp.c) - the panel's single
+             * required byte swap is already applied once, uniformly, to
+             * the whole framebuffer by esp_lvgl_port's software
+             * `.flags.swap_bytes` (see bsp_display.c). Setting this to 1
+             * pre-swapped the JPEG decoder's own output on top of that,
+             * so JPEG photos alone got swapped twice (i.e. effectively
+             * back to plain, unswapped order) and rendered with scrambled
+             * colors while BMP/PNG photos - decoded without any such
+             * pre-swap - rendered correctly.
+             */
+            .swap_color_bytes = 0,
         },
     };
     esp_jpeg_image_output_t out_img = {0};
