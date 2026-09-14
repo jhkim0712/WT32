@@ -110,7 +110,9 @@
       <h2>Photo album</h2>
       <p class="hint">Copy <code>.bmp</code>, <code>.jpg</code> or <code>.png</code> images into
         <code>/photos</code> on the microSD card (use the <b>Files</b> tab to upload them directly
-        from here). 480x320 images look best; others are auto-scaled.</p>
+        from here). 480x320 images look best; others are auto-scaled. Use the
+        <a href="/prepare.html">image prep tool</a> to crop and resize a photo to exactly
+        480x320 first.</p>
       <label>Slide interval (seconds)<input type="number" id="albumInterval" min="2" max="600"></label>
       <label class="switch-row"><input type="checkbox" id="albumShuffle"> Shuffle order</label>
       <div class="row"><button id="btnSaveAlbum" class="btn primary">Save</button><span id="albumMsg" class="msg"></span></div>
@@ -156,7 +158,9 @@
         <input type="file" id="filesUploadInput" multiple>
         <button id="btnFilesUpload" class="btn primary">Upload here</button>
       </div>
-      <p class="hint">Pick multiple files at once, or drag and drop them anywhere in this box - they upload to the current folder.</p>
+      <p class="hint">Pick multiple files at once, or drag and drop them anywhere in this box - they upload to the current folder.
+        Uploading a photo for the album? Use the <a href="/prepare.html">image prep tool</a> to
+        crop/resize it to 480x320 first.</p>
       <div class="progress" id="filesUploadProgressWrap" hidden>
         <div class="progress-bar" id="filesUploadProgressBar"></div>
       </div>

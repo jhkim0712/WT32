@@ -13,6 +13,11 @@
 static const char *TAG = "app_photo";
 
 #define APP_PHOTO_MAX_ENTRIES 400
+/* Guards scan_dir()'s recursion against a pathological (or symlink-cycle-like,
+ * were FAT to ever have such a thing) directory structure - deep enough for
+ * any real photo folder layout, shallow enough that a runaway nest can't
+ * overflow the stack. */
+#define APP_PHOTO_MAX_SCAN_DEPTH 8
 
 static char (*s_paths)[APP_PHOTO_PATH_MAX] = NULL;
 static size_t s_capacity = 0;
@@ -40,6 +45,55 @@ bool app_photo_is_gif(const char *path)
     return has_extension(path, ".gif");
 }
 
+/* Recurses into dir_path, appending every supported image file found - directly
+ * in it or in any subdirectory, to any depth up to APP_PHOTO_MAX_SCAN_DEPTH -
+ * to s_paths/s_order. Silently stops adding once s_count hits s_capacity, same
+ * as the old flat scan did; a missing/unopenable dir_path (which for a
+ * subdirectory just means "not a real problem", unlike the top-level call in
+ * app_photo_scan()) is likewise silently skipped rather than logged. */
+static void scan_dir(const char *dir_path, int depth)
+{
+    DIR *dir = opendir(dir_path);
+    if (!dir) {
+        return;
+    }
+
+    struct dirent *entry;
+    while ((entry = readdir(dir)) != NULL && s_count < s_capacity) {
+        if (strcmp(entry->d_name, ".") == 0 || strcmp(entry->d_name, "..") == 0) {
+            continue;
+        }
+
+        /* GCC can't prove dir_path + "/" + d_name always fits
+         * APP_PHOTO_PATH_MAX - safe truncation is fine here (a truncated path
+         * just fails to open later), so silence the warning instead of
+         * restructuring around a limit that isn't really at risk for any
+         * realistic folder nesting. */
+        char path[APP_PHOTO_PATH_MAX];
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wformat-truncation"
+        snprintf(path, sizeof(path), "%s/%s", dir_path, entry->d_name);
+#pragma GCC diagnostic pop
+
+        if (entry->d_type == DT_DIR) {
+            if (depth + 1 < APP_PHOTO_MAX_SCAN_DEPTH) {
+                scan_dir(path, depth + 1);
+            }
+            continue;
+        }
+
+        if (!is_supported_image(entry->d_name)) {
+            continue;
+        }
+
+        strncpy(s_paths[s_count], path, APP_PHOTO_PATH_MAX - 1);
+        s_paths[s_count][APP_PHOTO_PATH_MAX - 1] = '\0';
+        s_order[s_count] = s_count;
+        s_count++;
+    }
+    closedir(dir);
+}
+
 esp_err_t app_photo_scan(const char *dir_path)
 {
     DIR *dir = opendir(dir_path);
@@ -48,40 +102,21 @@ esp_err_t app_photo_scan(const char *dir_path)
         s_count = 0;
         return ESP_ERR_NOT_FOUND;
     }
+    closedir(dir);
 
     if (!s_paths) {
         s_capacity = APP_PHOTO_MAX_ENTRIES;
         s_paths = malloc(s_capacity * APP_PHOTO_PATH_MAX);
         s_order = malloc(s_capacity * sizeof(size_t));
         if (!s_paths || !s_order) {
-            closedir(dir);
             return ESP_ERR_NO_MEM;
         }
     }
 
     s_count = 0;
-    struct dirent *entry;
-    while ((entry = readdir(dir)) != NULL && s_count < s_capacity) {
-        if (entry->d_type == DT_DIR) {
-            continue;
-        }
-        if (!is_supported_image(entry->d_name)) {
-            continue;
-        }
-        /* GCC can't prove dir_path + d_name always fits APP_PHOTO_PATH_MAX (it
-         * can't see that dir_path is always our short, fixed "/sdcard/photos"
-         * call site) - safe truncation is fine here, so silence the warning
-         * instead of restructuring around a limit that isn't really at risk. */
-#pragma GCC diagnostic push
-#pragma GCC diagnostic ignored "-Wformat-truncation"
-        snprintf(s_paths[s_count], APP_PHOTO_PATH_MAX, "%s/%s", dir_path, entry->d_name);
-#pragma GCC diagnostic pop
-        s_order[s_count] = s_count;
-        s_count++;
-    }
-    closedir(dir);
+    scan_dir(dir_path, 0);
 
-    ESP_LOGI(TAG, "Found %u image(s) in %s", (unsigned)s_count, dir_path);
+    ESP_LOGI(TAG, "Found %u image(s) in %s (including subfolders)", (unsigned)s_count, dir_path);
     return ESP_OK;
 }
 
