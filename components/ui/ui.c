@@ -54,6 +54,30 @@ static bool weather_page_visible(void)
     return page_visible_when_configured() && ui_weather_is_visible();
 }
 
+/* The generic auto-cycle timer normally dwells on each screen for
+ * cfg->cycle_seconds before moving on - fine for clock/weather/info, but for
+ * the album that arbitrarily cuts the slideshow off after only a photo or
+ * two whenever there are more photos than cycle_seconds/album_interval_s
+ * implies. Stretch the dwell time to cover at least one full loop through
+ * the album's own photos in that case, so auto-cycle never carries the
+ * screen away before every photo has had a turn. */
+static void restart_cycle_timer(void)
+{
+    if (!s_cycle_timer) {
+        return;
+    }
+    app_config_t *cfg = app_config_get();
+    uint32_t period_ms = cfg->cycle_seconds > 0 ? (uint32_t)cfg->cycle_seconds * 1000 : 10000;
+    if (s_current == UI_PAGE_ALBUM) {
+        uint32_t dwell_ms = ui_album_dwell_ms();
+        if (dwell_ms > period_ms) {
+            period_ms = dwell_ms;
+        }
+    }
+    lv_timer_set_period(s_cycle_timer, period_ms);
+    lv_timer_reset(s_cycle_timer);
+}
+
 static void show_screen(int index, int step, lv_screen_load_anim_t anim)
 {
     ui_page_t next = wrap_index(index);
@@ -68,6 +92,7 @@ static void show_screen(int index, int step, lv_screen_load_anim_t anim)
     if (s_on_show[s_current]) {
         s_on_show[s_current]();
     }
+    restart_cycle_timer();
 }
 
 void ui_next_screen(void)
@@ -151,6 +176,7 @@ void ui_init(void)
     app_config_t *cfg = app_config_get();
     uint32_t period_ms = cfg->cycle_seconds > 0 ? (uint32_t)cfg->cycle_seconds * 1000 : 10000;
     s_cycle_timer = lv_timer_create(cycle_timer_cb, period_ms, NULL);
+    restart_cycle_timer();
 
     bsp_display_unlock();
 }

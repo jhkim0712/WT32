@@ -288,3 +288,14 @@ void ui_album_on_show(void)
     apply_theme();
     show_index(s_index);
 }
+
+uint32_t ui_album_dwell_ms(void)
+{
+    size_t count = app_photo_count();
+    if (count == 0) {
+        return 0;
+    }
+    app_config_t *cfg = app_config_get();
+    uint32_t interval_ms = cfg->album_interval_s > 0 ? (uint32_t)cfg->album_interval_s * 1000 : 8000;
+    return (uint32_t)count * interval_ms;
+}

@@ -14,6 +14,9 @@ void ui_clock_on_show(void);
 
 lv_obj_t *ui_album_create(void);
 void ui_album_on_show(void);
+/** @return how long the album screen needs to show every photo at least
+ *  once (photo count * album_interval_s), in ms; 0 if there are no photos. */
+uint32_t ui_album_dwell_ms(void);
 
 lv_obj_t *ui_weather_create(void);
 void ui_weather_on_show(void);
