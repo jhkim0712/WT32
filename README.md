@@ -21,7 +21,8 @@ setup is just a camera scan away.
 - **Photo album** - slideshow of `.bmp` / `.jpg` / `.png` images from a
   microSD card, swipe or tap to advance, configurable interval and shuffle.
   `.gif` files play as animated GIFs (native size, centered) instead of
-  being stretched to fill the panel like the static formats.
+  being stretched to fill the panel like the static formats. Can also pull
+  in photos from up to 4 Flickr RSS/Atom feeds, kept in sync automatically.
 - **Weather screen** - current conditions from OpenWeatherMap (temperature,
   description, humidity, wind), with a day/night condition icon from the
   bundled [Weather Icons](https://github.com/erikflowers/weather-icons)
@@ -44,7 +45,7 @@ setup is just a camera scan away.
   - Brightness, auto-cycle, mute.
   - Dark/Light theme, or Auto to switch on its own at times you set (e.g.
     light from 07:00, dark from 20:00).
-  - Photo album interval/shuffle.
+  - Photo album interval/shuffle, Flickr feeds (add/remove, sync now).
   - Weather: OpenWeatherMap API key + city ID, enable/disable the screen.
   - Hostname, restart, factory reset, fallback AP password.
   - Serial console log level (None through Verbose, default Info) - takes
@@ -159,6 +160,20 @@ scaled to fill the panel; they show at their native resolution, centered.
 Keep them reasonably small (both in pixel size and file size) for smooth
 playback and to avoid using up too much of the panel's frame buffer memory.
 
+#### Flickr feeds
+
+The **Album** tab can also add up to 4 Flickr photo feeds (RSS or Atom),
+e.g. `https://www.flickr.com/services/feeds/photos_public.gne?id=<user-id>&format=rss2`
+for someone's public photostream, or `...?tags=<tag>` for a tag. Once the
+device is on Wi-Fi, each feed's images are downloaded into
+`/photos/flickr/<feed-id>/` on the SD card and join the slideshow. Feeds are
+re-checked hourly (or right away with *Sync now*, or after adding/removing
+a feed). The folder mirrors the feed: photos that drop out of the feed are
+deleted, and removing a feed deletes all its photos - so don't keep
+anything else under `/photos/flickr`. Images are fetched at Flickr's 640px
+size rather than the feed's default 1024px, which still covers the panel
+while keeping downloads and decoding cheap.
+
 ## Firmware updates
 
 The **Firmware** tab in the web UI supports two ways to update, both going
@@ -256,6 +271,7 @@ components/
   app_time/            timezone + SNTP
   app_photo/           SD card scan + BMP/JPEG decode + resize
   app_weather/         OpenWeatherMap current-conditions polling
+  app_flickr/          Flickr RSS/Atom feed -> SD card photo sync
   app_web/             REST API + embedded HTML5/CSS/JS config page
   app_ota/             manual/GitHub firmware updates + identity validation
   ui/                  LVGL screens (Wi-Fi setup QR / clock / album /

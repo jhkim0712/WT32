@@ -116,6 +116,27 @@
       <label>Slide interval (seconds)<input type="number" id="albumInterval" min="2" max="600"></label>
       <label class="switch-row"><input type="checkbox" id="albumShuffle"> Shuffle order</label>
       <div class="row"><button id="btnSaveAlbum" class="btn primary">Save</button><span id="albumMsg" class="msg"></span></div>
+
+      <hr>
+      <h2>Flickr feeds</h2>
+      <p class="hint">Add a Flickr photo feed (RSS or Atom) - e.g. the feed link at the bottom of a
+        Flickr photostream, group or tag page, like
+        <code>https://www.flickr.com/services/feeds/photos_public.gne?id=12345678@N00&amp;format=rss2</code>.
+        Its images are downloaded to <code>/photos/flickr</code> on the SD card and kept in sync with
+        the feed (checked hourly): photos that leave the feed are deleted, as are all of a feed's
+        photos when you remove it. Up to 4 feeds; needs a Wi-Fi connection.</p>
+      <ul class="list" id="flickrFeedList"></ul>
+      <p class="hint" id="flickrEmptyHint">No feeds added yet.</p>
+      <div class="row">
+        <input type="text" id="flickrFeedUrl" placeholder="https://www.flickr.com/services/feeds/..." autocomplete="off">
+        <button id="btnAddFlickrFeed" class="btn primary">Add feed</button>
+      </div>
+      <div class="grid2 spaced">
+        <div><span class="label">Sync status</span><span class="value" id="flickrStatus">-</span></div>
+        <div><span class="label">Last sync</span><span class="value" id="flickrLastSync">-</span></div>
+        <div><span class="label">Flickr photos</span><span class="value" id="flickrCount">-</span></div>
+      </div>
+      <div class="row"><button id="btnFlickrSync" class="btn">Sync now</button><span id="flickrMsg" class="msg"></span></div>
     </div>
   </section>
 
