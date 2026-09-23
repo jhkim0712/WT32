@@ -25,6 +25,11 @@ extern "C" {
 #define APP_CFG_PASS_MAX_LEN    64
 #define APP_CFG_STR_MAX_LEN     64
 #define APP_CFG_TZ_MAX_LEN      64
+/* Flickr photo feeds: up to APP_CFG_FLICKR_MAX_FEEDS URLs, each shorter than
+ * APP_CFG_FLICKR_URL_MAX_LEN, stored newline-separated in one string. */
+#define APP_CFG_FLICKR_MAX_FEEDS    4
+#define APP_CFG_FLICKR_URL_MAX_LEN  256
+#define APP_CFG_FLICKR_FEEDS_MAX_LEN (APP_CFG_FLICKR_MAX_FEEDS * APP_CFG_FLICKR_URL_MAX_LEN)
 
 typedef enum {
     CLOCK_FACE_DIGITAL = 0,
@@ -87,6 +92,9 @@ typedef struct {
     /* --- Photo album --- */
     uint16_t album_interval_s;
     bool     album_shuffle;
+    /* Newline-separated Flickr RSS/Atom feed URLs whose images app_flickr
+     * mirrors into /photos/flickr on the SD card. Empty = none. */
+    char     flickr_feeds[APP_CFG_FLICKR_FEEDS_MAX_LEN];
 
     /* --- Weather (OpenWeatherMap) --- */
     bool     weather_enabled;

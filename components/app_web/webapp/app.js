@@ -212,6 +212,8 @@
     $("audioMuted").checked = !!currentConfig.audio_muted;
     $("albumInterval").value = currentConfig.album_interval_s;
     $("albumShuffle").checked = !!currentConfig.album_shuffle;
+    flickrFeeds = currentConfig.flickr_feeds || [];
+    renderFlickrFeeds();
     $("weatherEnabled").checked = !!currentConfig.weather_enabled;
     $("weatherApiKey").value = currentConfig.weather_api_key || "";
     $("weatherCityId").value = currentConfig.weather_city_id || "";
@@ -269,6 +271,107 @@
       album_shuffle: $("albumShuffle").checked,
     }, $("albumMsg"));
   });
+
+  /* ---- Flickr feeds ---- */
+  const FLICKR_MAX_FEEDS = 4; /* APP_CFG_FLICKR_MAX_FEEDS */
+  const FLICKR_URL_MAX_LEN = 256; /* APP_CFG_FLICKR_URL_MAX_LEN */
+  let flickrFeeds = [];
+
+  function renderFlickrFeeds() {
+    const list = $("flickrFeedList");
+    list.innerHTML = "";
+    flickrFeeds.forEach(function (url, i) {
+      const li = document.createElement("li");
+      li.className = "feed";
+      const urlSpan = document.createElement("span");
+      urlSpan.className = "feed-url";
+      urlSpan.textContent = url;
+      const removeBtn = document.createElement("button");
+      removeBtn.textContent = "✕";
+      removeBtn.title = "Remove feed";
+      removeBtn.addEventListener("click", function () {
+        if (!confirm("Remove this feed? Its downloaded photos will be deleted from the SD card.")) return;
+        const next = flickrFeeds.slice();
+        next.splice(i, 1);
+        saveFlickrFeeds(next);
+      });
+      li.appendChild(urlSpan);
+      li.appendChild(removeBtn);
+      list.appendChild(li);
+    });
+    $("flickrEmptyHint").hidden = flickrFeeds.length > 0;
+    $("btnAddFlickrFeed").disabled = flickrFeeds.length >= FLICKR_MAX_FEEDS;
+  }
+
+  async function saveFlickrFeeds(next) {
+    try {
+      await api("/api/config", "POST", { flickr_feeds: next });
+    } catch (e) {
+      showMsg($("flickrMsg"), "Failed to save", false);
+      return false;
+    }
+    flickrFeeds = next;
+    renderFlickrFeeds();
+    showMsg($("flickrMsg"), "Saved - syncing...", true);
+    setTimeout(refreshFlickrStatus, 1000);
+    return true;
+  }
+
+  async function addFlickrFeed() {
+    const url = $("flickrFeedUrl").value.trim();
+    if (!/^https?:\/\/\S+$/.test(url) || url.length >= FLICKR_URL_MAX_LEN) {
+      showMsg($("flickrMsg"), "Enter a valid feed URL (starting with https://)", false);
+      return;
+    }
+    if (flickrFeeds.indexOf(url) >= 0) {
+      showMsg($("flickrMsg"), "That feed is already added", false);
+      return;
+    }
+    if (await saveFlickrFeeds(flickrFeeds.concat([url]))) {
+      $("flickrFeedUrl").value = "";
+    }
+  }
+
+  $("btnAddFlickrFeed").addEventListener("click", addFlickrFeed);
+  $("flickrFeedUrl").addEventListener("keydown", function (e) {
+    if (e.key === "Enter") addFlickrFeed();
+  });
+
+  let flickrPollTimer = null;
+
+  async function refreshFlickrStatus() {
+    clearTimeout(flickrPollTimer);
+    try {
+      const st = await api("/api/flickr/status");
+      if (st.syncing) {
+        $("flickrStatus").textContent = "Syncing...";
+        flickrPollTimer = setTimeout(refreshFlickrStatus, 2000);
+      } else if (!st.last_sync) {
+        $("flickrStatus").textContent = flickrFeeds.length ? "Waiting for Wi-Fi / first sync" : "No feeds";
+      } else {
+        $("flickrStatus").textContent = st.have_error ? ("Error: " + st.error) : "OK";
+      }
+      /* Before the device's clock is set via NTP, last_sync is seconds since
+       * boot-ish (1970) - not worth showing as a date. */
+      $("flickrLastSync").textContent = st.last_sync > 1600000000 ? new Date(st.last_sync * 1000).toLocaleString()
+        : (st.last_sync ? "Done (device clock not set)" : "-");
+      $("flickrCount").textContent = st.last_sync ? st.image_count : "-";
+    } catch (e) {
+      $("flickrStatus").textContent = "-";
+    }
+  }
+
+  $("btnFlickrSync").addEventListener("click", async function () {
+    try {
+      await api("/api/flickr/sync", "POST");
+      showMsg($("flickrMsg"), "Sync started", true);
+      setTimeout(refreshFlickrStatus, 1000);
+    } catch (e) {
+      showMsg($("flickrMsg"), "Failed to start sync", false);
+    }
+  });
+
+  document.querySelector('.tab[data-tab="album"]').addEventListener("click", refreshFlickrStatus);
 
   $("btnSaveWeather").addEventListener("click", function () {
     saveConfig({

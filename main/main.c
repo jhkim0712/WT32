@@ -8,7 +8,8 @@
  *   3. Display + touch (so we have something on screen ASAP)
  *   4. SD card + photo album scan
  *   5. Audio
- *   6. Wi-Fi (SoftAP always, STA best-effort) + SNTP + weather poller + web server
+ *   6. Wi-Fi (SoftAP always, STA best-effort) + SNTP + weather poller +
+ *      Flickr feed sync + web server
  *   7. LVGL UI
  */
 #include <stdio.h>
@@ -21,6 +22,7 @@
 #include "app_web.h"
 #include "app_photo.h"
 #include "app_weather.h"
+#include "app_flickr.h"
 #include "app_ota.h"
 #include "bsp/bsp_board.h"
 #include "bsp/bsp_pins.h"
@@ -69,6 +71,7 @@ void app_main(void)
     ESP_ERROR_CHECK(app_wifi_start());
     app_time_start();
     app_weather_start();
+    app_flickr_start();
     app_web_start();
 
     ESP_LOGI(TAG, "Starting UI...");

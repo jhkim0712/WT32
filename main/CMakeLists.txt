@@ -10,6 +10,7 @@ idf_component_register(
         app_web
         app_photo
         app_weather
+        app_flickr
         app_ota
         ui
 )

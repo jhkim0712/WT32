@@ -137,6 +137,21 @@ input[type="range"] { width: 100%; }
 }
 .list li:hover { border-color: var(--accent); }
 .list li .rssi { color: var(--text-dim); font-size: 0.78rem; }
+.list li.feed { cursor: default; gap: 0.5rem; }
+.list li.feed:hover { border-color: var(--border); }
+.list li.feed .feed-url { word-break: break-all; }
+.list li.feed button {
+  flex: 0 0 auto;
+  background: none;
+  border: none;
+  color: var(--text-dim);
+  cursor: pointer;
+  font-size: 0.95rem;
+  padding: 0.15rem 0.3rem;
+}
+.list li.feed button:hover { color: var(--danger); }
+
+.grid2.spaced { margin-top: 1rem; }
 
 hr { border: none; border-top: 1px solid var(--border); margin: 1.2rem 0; }
 

@@ -22,6 +22,7 @@
 #include "app_time.h"
 #include "app_photo.h"
 #include "app_weather.h"
+#include "app_flickr.h"
 #include "app_ota.h"
 #include "app_files.h"
 #include "bsp/bsp_board.h"
@@ -278,6 +279,14 @@ static esp_err_t config_get_handler(httpd_req_t *req)
     cJSON_AddStringToObject(root, "theme_night_start", cfg->theme_night_start);
     cJSON_AddNumberToObject(root, "album_interval_s", cfg->album_interval_s);
     cJSON_AddBoolToObject(root, "album_shuffle", cfg->album_shuffle);
+    cJSON *feeds = cJSON_AddArrayToObject(root, "flickr_feeds");
+    char feeds_copy[APP_CFG_FLICKR_FEEDS_MAX_LEN];
+    strncpy(feeds_copy, cfg->flickr_feeds, sizeof(feeds_copy) - 1);
+    feeds_copy[sizeof(feeds_copy) - 1] = '\0';
+    char *save = NULL;
+    for (char *url = strtok_r(feeds_copy, "\n", &save); url; url = strtok_r(NULL, "\n", &save)) {
+        cJSON_AddItemToArray(feeds, cJSON_CreateString(url));
+    }
     cJSON_AddBoolToObject(root, "weather_enabled", cfg->weather_enabled);
     cJSON_AddStringToObject(root, "weather_api_key", cfg->weather_api_key);
     cJSON_AddStringToObject(root, "weather_city_id", cfg->weather_city_id);
@@ -286,6 +295,64 @@ static esp_err_t config_get_handler(httpd_req_t *req)
     cJSON_AddStringToObject(root, "log_level", log_level_to_str(cfg->log_level));
 
     return send_json(req, root);
+}
+
+/* Validates the web UI's feed list (a JSON array of URL strings) and joins
+ * it into app_config's newline-separated form: surrounding whitespace is
+ * trimmed, blanks and duplicates dropped. Rejects the whole list (returns
+ * false) on anything that isn't an http(s) URL, a URL that's too long or
+ * contains whitespace, or more than APP_CFG_FLICKR_MAX_FEEDS feeds. */
+static bool flickr_feeds_from_json(cJSON *arr, char *out, size_t out_len)
+{
+    size_t used = 0;
+    int count = 0;
+    out[0] = '\0';
+    cJSON *entry;
+    cJSON_ArrayForEach(entry, arr) {
+        if (!cJSON_IsString(entry)) {
+            return false;
+        }
+        const char *url = entry->valuestring;
+        while (isspace((unsigned char)*url)) {
+            url++;
+        }
+        size_t len = strlen(url);
+        while (len > 0 && isspace((unsigned char)url[len - 1])) {
+            len--;
+        }
+        if (len == 0) {
+            continue;
+        }
+        if (len >= APP_CFG_FLICKR_URL_MAX_LEN ||
+            (strncmp(url, "https://", 8) != 0 && strncmp(url, "http://", 7) != 0)) {
+            return false;
+        }
+        for (size_t char_i = 0; char_i < len; char_i++) {
+            if (isspace((unsigned char)url[char_i])) {
+                return false;
+            }
+        }
+
+        bool dup = false;
+        for (const char *p = out; *p && !dup;) {
+            size_t line_len = strcspn(p, "\n");
+            dup = line_len == len && strncmp(p, url, len) == 0;
+            p += line_len + (p[line_len] ? 1 : 0);
+        }
+        if (dup) {
+            continue;
+        }
+        if (++count > APP_CFG_FLICKR_MAX_FEEDS || used + len + 2 > out_len) {
+            return false;
+        }
+        if (used > 0) {
+            out[used++] = '\n';
+        }
+        memcpy(out + used, url, len);
+        used += len;
+        out[used] = '\0';
+    }
+    return true;
 }
 
 static esp_err_t config_post_handler(httpd_req_t *req)
@@ -362,6 +429,17 @@ static esp_err_t config_post_handler(httpd_req_t *req)
             app_photo_unshuffle();
         }
     }
+    if ((item = cJSON_GetObjectItem(root, "flickr_feeds")) && cJSON_IsArray(item)) {
+        char feeds[APP_CFG_FLICKR_FEEDS_MAX_LEN];
+        if (!flickr_feeds_from_json(item, feeds, sizeof(feeds))) {
+            cJSON_Delete(root);
+            return send_json_error(req, "400 Bad Request", "invalid_feed_url");
+        }
+        if (strcmp(feeds, cfg->flickr_feeds) != 0) {
+            strcpy(cfg->flickr_feeds, feeds);
+            app_flickr_request_sync();
+        }
+    }
     if ((item = cJSON_GetObjectItem(root, "weather_enabled")) && cJSON_IsBool(item)) {
         cfg->weather_enabled = cJSON_IsTrue(item);
         app_weather_request_refresh();
@@ -419,6 +497,30 @@ static esp_err_t weather_get_handler(httpd_req_t *req)
     cJSON_AddNumberToObject(root, "updated_at", (double)w.updated_at);
 
     return send_json(req, root);
+}
+
+/* ---------------------------------------------------------------------- */
+/* /api/flickr/... routes                                                  */
+/* ---------------------------------------------------------------------- */
+
+static esp_err_t flickr_status_get_handler(httpd_req_t *req)
+{
+    app_flickr_status_t st;
+    app_flickr_get_status(&st);
+
+    cJSON *root = cJSON_CreateObject();
+    cJSON_AddBoolToObject(root, "syncing", st.syncing);
+    cJSON_AddBoolToObject(root, "have_error", st.have_error);
+    cJSON_AddStringToObject(root, "error", st.error);
+    cJSON_AddNumberToObject(root, "last_sync", (double)st.last_sync);
+    cJSON_AddNumberToObject(root, "image_count", st.image_count);
+    return send_json(req, root);
+}
+
+static esp_err_t flickr_sync_post_handler(httpd_req_t *req)
+{
+    app_flickr_request_sync();
+    return send_ok(req);
 }
 
 /* ---------------------------------------------------------------------- */
@@ -966,7 +1068,7 @@ static esp_err_t captive_redirect_handler(httpd_req_t *req, httpd_err_code_t err
 esp_err_t app_web_start(void)
 {
     httpd_config_t config = HTTPD_DEFAULT_CONFIG();
-    config.max_uri_handlers = 30; /* routes[] below is at 26 - keep a few spare */
+    config.max_uri_handlers = 32; /* routes[] below is at 28 - keep a few spare */
     config.lru_purge_enable = true;
     config.uri_match_fn = httpd_uri_match_wildcard;
     config.stack_size = 8192; /* OTA writes + JSON parsing want a bit more than the 4KB default */
@@ -989,6 +1091,8 @@ esp_err_t app_web_start(void)
         {.uri = "/api/config",                .method = HTTP_GET,  .handler = config_get_handler},
         {.uri = "/api/config",                .method = HTTP_POST, .handler = config_post_handler},
         {.uri = "/api/weather",               .method = HTTP_GET,  .handler = weather_get_handler},
+        {.uri = "/api/flickr/status",         .method = HTTP_GET,  .handler = flickr_status_get_handler},
+        {.uri = "/api/flickr/sync",           .method = HTTP_POST, .handler = flickr_sync_post_handler},
         {.uri = "/api/wifi/scan",             .method = HTTP_GET,  .handler = wifi_scan_get_handler},
         {.uri = "/api/wifi/connect",          .method = HTTP_POST, .handler = wifi_connect_post_handler},
         {.uri = "/api/system/restart",        .method = HTTP_POST, .handler = restart_post_handler},
