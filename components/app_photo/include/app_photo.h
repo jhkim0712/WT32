@@ -49,12 +49,14 @@ void app_photo_shuffle(void);
 void app_photo_unshuffle(void);
 
 /**
- * @brief Decode image @p index and scale it to canvas_w x canvas_h.
+ * @brief Decode image @p index and scale it into @p canvas.
  *
- * @param out_buf receives a heap buffer of canvas_w*canvas_h RGB565 pixels;
- *                the caller owns it and must free() it.
+ * @param canvas caller-owned buffer of canvas_w*canvas_h RGB565 pixels. The
+ *               caller keeps it across calls, so the slideshow never has to
+ *               find a fresh ~300KB contiguous block in (by then fragmented)
+ *               PSRAM for every photo. On failure its contents are undefined.
  */
-esp_err_t app_photo_decode_to_canvas(size_t index, uint16_t canvas_w, uint16_t canvas_h, uint16_t **out_buf);
+esp_err_t app_photo_decode_to_canvas(size_t index, uint16_t *canvas, uint16_t canvas_w, uint16_t canvas_h);
 
 /** @return true if @p path has a .gif extension - see the file comment. */
 bool app_photo_is_gif(const char *path);

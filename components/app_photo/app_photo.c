@@ -153,7 +153,7 @@ void app_photo_unshuffle(void)
     }
 }
 
-esp_err_t app_photo_decode_to_canvas(size_t index, uint16_t canvas_w, uint16_t canvas_h, uint16_t **out_buf)
+esp_err_t app_photo_decode_to_canvas(size_t index, uint16_t *canvas, uint16_t canvas_w, uint16_t canvas_h)
 {
     const char *path = app_photo_get_path(index);
     if (!path) {
@@ -165,40 +165,25 @@ esp_err_t app_photo_decode_to_canvas(size_t index, uint16_t canvas_w, uint16_t c
      * right after this line still identifies which file caused it. */
     ESP_LOGD(TAG, "Decoding %s (%u/%u)", path, (unsigned)(index + 1), (unsigned)s_count);
 
-    uint16_t *native = NULL;
-    uint16_t native_w = 0, native_h = 0;
     esp_err_t ret;
-
-    if (has_extension(path, ".bmp")) {
-        ret = app_photo_bmp_decode_native(path, &native, &native_w, &native_h);
-    } else if (has_extension(path, ".png")) {
-        ret = app_photo_png_decode_native(path, &native, &native_w, &native_h);
+    if (has_extension(path, ".bmp") || has_extension(path, ".png")) {
+        uint16_t *native = NULL;
+        uint16_t native_w = 0, native_h = 0;
+        if (has_extension(path, ".bmp")) {
+            ret = app_photo_bmp_decode_native(path, &native, &native_w, &native_h);
+        } else {
+            ret = app_photo_png_decode_native(path, &native, &native_w, &native_h);
+        }
+        if (ret == ESP_OK) {
+            app_photo_resize_rgb565(native, native_w, native_h, canvas, canvas_w, canvas_h);
+            free(native);
+        }
     } else {
-        ret = app_photo_jpeg_decode_native(path, canvas_w, canvas_h, &native, &native_w, &native_h);
+        ret = app_photo_jpeg_decode_to_canvas(path, canvas, canvas_w, canvas_h);
     }
 
     if (ret != ESP_OK) {
         ESP_LOGW(TAG, "Failed to decode %s: %s", path, esp_err_to_name(ret));
-        return ret;
     }
-
-    if (native_w == canvas_w && native_h == canvas_h) {
-        /* Already exactly the panel's resolution (the README's own advice
-         * for "best quality") - use the decoded buffer as-is instead of
-         * allocating a second one just to copy it into. Skipping that
-         * second buffer matters on this board: PSRAM is tight enough that
-         * needing both at once could fail with ESP_ERR_NO_MEM right here
-         * even though decoding itself just succeeded. */
-        *out_buf = native;
-        return ESP_OK;
-    }
-
-    uint16_t *scaled = app_photo_resize_rgb565(native, native_w, native_h, canvas_w, canvas_h);
-    free(native);
-    if (!scaled) {
-        return ESP_ERR_NO_MEM;
-    }
-
-    *out_buf = scaled;
-    return ESP_OK;
+    return ret;
 }

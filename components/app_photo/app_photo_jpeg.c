@@ -1,147 +1,162 @@
 /**
  * @file app_photo_jpeg.c
- * @brief Baseline JPEG decode via the managed `espressif/esp_jpeg` component.
+ * @brief Baseline JPEG decode straight into the caller's canvas, via the
+ *        TJpgDec decoder that the managed `espressif/esp_jpeg` component
+ *        selects (the ESP32-S3's ROM copy by default, see CONFIG_JD_USE_ROM).
  *
- * This file is intentionally isolated: esp_jpeg's public API has changed
- * shape across releases, so if `idf.py build` fails here after a component
- * upgrade, this is the only place that needs patching - the BMP path in
- * app_photo_bmp.c is unaffected and always works. Check the installed
- * version's README under managed_components/espressif__esp_jpeg for the
- * exact struct/enum names if you land on a release where this doesn't
- * match.
+ * Deliberately bypasses esp_jpeg_decode() itself: that API only knows how to
+ * write the whole decoded image into one outbuf, so showing e.g. a 640x427
+ * Flickr "_z" photo needed a 546KB RGB565 buffer (plus the whole file read
+ * into PSRAM first) on top of the permanent 480x320 canvas - more contiguous
+ * PSRAM than this board has left once LVGL, Wi-Fi/TLS and the canvas are
+ * all in. Driving TJpgDec directly instead gets us its per-block output
+ * callback, which nearest-neighbor scales each decoded block into the
+ * canvas as it arrives, and its input callback, which streams the file off
+ * the SD card - so the only allocation left is TJpgDec's own ~3KB work pool.
  */
 #include <stdio.h>
 #include <stdlib.h>
 #include "esp_log.h"
-#include "esp_heap_caps.h"
-#include "jpeg_decoder.h"
+#include "esp_rom_caps.h"
+#include "sdkconfig.h"
+
+#if CONFIG_JD_USE_ROM
+#include "rom/tjpgd.h"
+/* The ROM copy is an older TJpgDec with different callback signatures, and
+ * always outputs RGB888 (JD_FORMAT 0). */
+typedef unsigned int jd_in_len_t;
+typedef unsigned int jd_out_ret_t;
+#else
+#include "tjpgd.h"
+typedef size_t jd_in_len_t;
+typedef int jd_out_ret_t;
+#endif
 
 #include "app_photo_internal.h"
 
 static const char *TAG = "app_photo_jpeg";
 
-esp_err_t app_photo_jpeg_decode_native(const char *path, uint16_t target_w, uint16_t target_h,
-                                        uint16_t **out_buf, uint16_t *out_w, uint16_t *out_h)
+/* TJpgDec's documented minimum work pool, independent of image size (same
+ * value esp_jpeg itself uses). Too big for the stack of whatever LVGL task
+ * calls this, so it's malloc'd - small enough to land in internal RAM. */
+#define JPEG_WORK_POOL_SIZE 3100
+
+typedef struct {
+    FILE *f;
+    uint16_t *canvas;
+    uint16_t canvas_w, canvas_h;
+    uint32_t x_ratio, y_ratio; /* 16.16 fixed point, same mapping as app_photo_resize.c */
+} jpeg_ctx_t;
+
+static jd_in_len_t in_cb(JDEC *jd, uint8_t *buf, jd_in_len_t len)
+{
+    jpeg_ctx_t *ctx = (jpeg_ctx_t *)jd->device;
+    if (!buf) {
+        /* TJpgDec's "skip len bytes" request */
+        return fseek(ctx->f, (long)len, SEEK_CUR) == 0 ? len : 0;
+    }
+    return (jd_in_len_t)fread(buf, 1, len, ctx->f);
+}
+
+/* First canvas pixel whose source coordinate (d * ratio) >> 16 is >= src,
+ * i.e. the exact inverse of app_photo_resize.c's forward mapping. */
+static uint32_t first_dst(uint32_t src, uint32_t ratio)
+{
+    return (uint32_t)((((uint64_t)src << 16) + ratio - 1) / ratio);
+}
+
+static jd_out_ret_t out_cb(JDEC *jd, void *bitmap, JRECT *rect)
+{
+    jpeg_ctx_t *ctx = (jpeg_ctx_t *)jd->device;
+    uint32_t rect_w = rect->right - rect->left + 1;
+
+    uint32_t y_end = first_dst((uint32_t)rect->bottom + 1, ctx->y_ratio);
+    if (y_end > ctx->canvas_h) {
+        y_end = ctx->canvas_h;
+    }
+    uint32_t x_start = first_dst(rect->left, ctx->x_ratio);
+    uint32_t x_end = first_dst((uint32_t)rect->right + 1, ctx->x_ratio);
+    if (x_end > ctx->canvas_w) {
+        x_end = ctx->canvas_w;
+    }
+
+    for (uint32_t y = first_dst(rect->top, ctx->y_ratio); y < y_end; y++) {
+        uint32_t src_row = ((y * ctx->y_ratio) >> 16) - rect->top;
+        uint16_t *dst = ctx->canvas + (size_t)y * ctx->canvas_w;
+        for (uint32_t x = x_start; x < x_end; x++) {
+            uint32_t src_i = src_row * rect_w + (((x * ctx->x_ratio) >> 16) - rect->left);
+#if JD_FORMAT == 1
+            dst[x] = ((const uint16_t *)bitmap)[src_i];
+#else
+            /* No byte swap here, same as the PNG/BMP decoders - the panel's
+             * one required swap is applied to the whole framebuffer by
+             * esp_lvgl_port's `.flags.swap_bytes` (see bsp_display.c). */
+            const uint8_t *px = (const uint8_t *)bitmap + src_i * 3;
+            dst[x] = (uint16_t)(((px[0] & 0xF8) << 8) | ((px[1] & 0xFC) << 3) | (px[2] >> 3));
+#endif
+        }
+    }
+    return 1; /* continue decoding */
+}
+
+esp_err_t app_photo_jpeg_decode_to_canvas(const char *path, uint16_t *canvas, uint16_t canvas_w, uint16_t canvas_h)
 {
     FILE *f = fopen(path, "rb");
     if (!f) {
         return ESP_ERR_NOT_FOUND;
     }
-    fseek(f, 0, SEEK_END);
-    long fsize = ftell(f);
-    fseek(f, 0, SEEK_SET);
-    if (fsize <= 0) {
-        fclose(f);
-        return ESP_FAIL;
-    }
 
-    /* Both the raw file buffer and (below) the decoded RGB565 buffer scale
-     * with image size and can reach into the megabytes - PSRAM has room for
-     * that, the ~400KB of internal DRAM left over after LVGL/Wi-Fi/lwIP does
-     * not, so ask for it explicitly rather than let the general allocator
-     * pick. */
-    uint8_t *jpg_data = heap_caps_malloc(fsize, MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT);
-    if (!jpg_data) {
-        ESP_LOGW(TAG, "%s: out of PSRAM reading %ld-byte file (%u free)", path, fsize,
-                 (unsigned)heap_caps_get_free_size(MALLOC_CAP_SPIRAM));
+    void *pool = malloc(JPEG_WORK_POOL_SIZE);
+    if (!pool) {
         fclose(f);
         return ESP_ERR_NO_MEM;
     }
-    size_t read_len = fread(jpg_data, 1, fsize, f);
-    fclose(f);
-    if (read_len != (size_t)fsize) {
-        free(jpg_data);
-        return ESP_FAIL;
-    }
 
-    esp_jpeg_image_cfg_t cfg = {
-        .indata = jpg_data,
-        .indata_size = (uint32_t)fsize,
-        .outbuf = NULL,
-        .outbuf_size = 0,
-        .out_format = JPEG_IMAGE_FORMAT_RGB565,
-        .out_scale = JPEG_IMAGE_SCALE_0,
-        .flags = {
-            /* Leave the byte order alone here, same as the PNG/BMP decoders
-             * (app_photo_png.c/app_photo_bmp.c) - the panel's single
-             * required byte swap is already applied once, uniformly, to
-             * the whole framebuffer by esp_lvgl_port's software
-             * `.flags.swap_bytes` (see bsp_display.c). Setting this to 1
-             * pre-swapped the JPEG decoder's own output on top of that,
-             * so JPEG photos alone got swapped twice (i.e. effectively
-             * back to plain, unswapped order) and rendered with scrambled
-             * colors while BMP/PNG photos - decoded without any such
-             * pre-swap - rendered correctly.
-             */
-            .swap_color_bytes = 0,
-        },
+    jpeg_ctx_t ctx = {
+        .f = f,
+        .canvas = canvas,
+        .canvas_w = canvas_w,
+        .canvas_h = canvas_h,
     };
-    esp_jpeg_image_output_t out_img = {0};
+    JDEC jd;
+    esp_err_t ret = ESP_OK;
 
-    /* First pass at scale 0 just to learn the native resolution - cheap,
-     * esp_jpeg_get_image_info() never touches outbuf/outbuf_size. */
-    esp_err_t ret = esp_jpeg_get_image_info(&cfg, &out_img);
-    if (ret != ESP_OK) {
-        ESP_LOGW(TAG, "%s: failed to parse JPEG header (%s)", path, esp_err_to_name(ret));
-        free(jpg_data);
-        return ret;
+    JRESULT res = jd_prepare(&jd, in_cb, pool, JPEG_WORK_POOL_SIZE, &ctx);
+    if (res != JDR_OK) {
+        ESP_LOGW(TAG, "%s: failed to parse JPEG header (TJpgDec error %d)", path, res);
+        ret = ESP_FAIL;
+        goto out;
     }
 
-    /* Pick the smallest decode scale (largest divisor) whose result still
-     * covers the requested canvas in both dimensions, so we never decode a
-     * multi-megapixel phone photo at full native resolution just to shrink
-     * it back down to a 480x320 screen. */
-    if (target_w > 0 && target_h > 0) {
-        if (out_img.width >= target_w * 8 && out_img.height >= target_h * 8) {
-            cfg.out_scale = JPEG_IMAGE_SCALE_1_8;
-        } else if (out_img.width >= target_w * 4 && out_img.height >= target_h * 4) {
-            cfg.out_scale = JPEG_IMAGE_SCALE_1_4;
-        } else if (out_img.width >= target_w * 2 && out_img.height >= target_h * 2) {
-            cfg.out_scale = JPEG_IMAGE_SCALE_1_2;
-        }
+    /* Pick the smallest decode scale (largest divisor, up to TJpgDec's 1/8)
+     * whose result still covers the canvas in both dimensions - no memory
+     * reason to any more, but it's free speed and the scaled-down source
+     * looks the same after nearest-neighbor sampling. */
+    uint8_t scale = 0;
+    while (scale < 3 && (jd.width >> (scale + 1)) >= canvas_w && (jd.height >> (scale + 1)) >= canvas_h) {
+        scale++;
+    }
+    /* TJpgDec's scaled output covers exactly (width >> scale) x
+     * (height >> scale) - see its mcu_output() - so every canvas pixel maps
+     * inside some block and gets written exactly once. */
+    uint32_t src_w = jd.width >> scale;
+    uint32_t src_h = jd.height >> scale;
+    if (src_w == 0 || src_h == 0) {
+        ESP_LOGW(TAG, "%s: %ux%u is too small to decode", path, (unsigned)jd.width, (unsigned)jd.height);
+        ret = ESP_FAIL;
+        goto out;
+    }
+    ctx.x_ratio = (src_w << 16) / canvas_w;
+    ctx.y_ratio = (src_h << 16) / canvas_h;
+
+    res = jd_decomp(&jd, out_cb, scale);
+    if (res != JDR_OK) {
+        ESP_LOGW(TAG, "%s: JPEG decode failed (TJpgDec error %d)", path, res);
+        ret = ESP_FAIL;
     }
 
-    if (cfg.out_scale != JPEG_IMAGE_SCALE_0) {
-        /* Re-query at the chosen scale: output_len/width/height above were
-         * for scale 0 (native) and don't reflect the shrunk size. */
-        cfg.priv.read = 0;
-        ret = esp_jpeg_get_image_info(&cfg, &out_img);
-        if (ret != ESP_OK) {
-            ESP_LOGW(TAG, "%s: failed to re-parse JPEG header at scale (%s)", path, esp_err_to_name(ret));
-            free(jpg_data);
-            return ret;
-        }
-    }
-
-    size_t out_size = out_img.output_len;
-    if (out_size == 0 || out_size > PHOTO_MAX_DECODE_BYTES) {
-        ESP_LOGW(TAG, "%s: %dx%d is too large to decode (limit %d bytes)", path, out_img.width, out_img.height,
-                  PHOTO_MAX_DECODE_BYTES);
-        free(jpg_data);
-        return ESP_ERR_NO_MEM;
-    }
-
-    uint16_t *pixels = heap_caps_malloc(out_size, MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT);
-    if (!pixels) {
-        ESP_LOGW(TAG, "%s: out of PSRAM decoding %dx%d (%u bytes needed, %u free)", path, out_img.width,
-                 out_img.height, (unsigned)out_size, (unsigned)heap_caps_get_free_size(MALLOC_CAP_SPIRAM));
-        free(jpg_data);
-        return ESP_ERR_NO_MEM;
-    }
-
-    cfg.outbuf = (uint8_t *)pixels;
-    cfg.outbuf_size = (uint32_t)out_size;
-    ret = esp_jpeg_decode(&cfg, &out_img);
-    free(jpg_data);
-
-    if (ret != ESP_OK) {
-        ESP_LOGW(TAG, "%s: JPEG decode failed (%s)", path, esp_err_to_name(ret));
-        free(pixels);
-        return ret;
-    }
-
-    *out_buf = pixels;
-    *out_w = (uint16_t)out_img.width;
-    *out_h = (uint16_t)out_img.height;
-    return ESP_OK;
+out:
+    free(pool);
+    fclose(f);
+    return ret;
 }

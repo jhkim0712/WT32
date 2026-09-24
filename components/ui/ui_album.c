@@ -15,8 +15,8 @@
  * reproduce app_photo_resize.c's independent x/y stretch anyway).
  */
 #include <stdio.h>
-#include <stdlib.h>
 #include "esp_log.h"
+#include "esp_heap_caps.h"
 #include "ui_internal.h"
 #include "app_photo.h"
 #include "app_config.h"
@@ -29,7 +29,7 @@ static lv_obj_t *s_img;
 static lv_obj_t *s_gif;
 static lv_obj_t *s_empty_label;
 static lv_image_dsc_t s_img_dsc;
-static uint16_t *s_pixel_buf = NULL;
+static uint16_t *s_canvas = NULL; /* allocated once, never freed - see canvas_get() */
 static size_t s_index = 0;
 static lv_timer_t *s_timer;
 static bool s_theme_dark = true; /* sentinel matching the initial style below; forces the first apply_theme() to run */
@@ -49,12 +49,26 @@ static void apply_theme(void)
     lv_obj_set_style_text_color(s_empty_label, ui_theme_color(0xffffff, 0x1c1f26), 0);
 }
 
-static void free_current_buf(void)
+/* The one 480x320 RGB565 canvas (~300KB) every static photo is decoded
+ * into, kept for the life of the firmware. It used to be malloc'd per photo
+ * and freed before the next, but with LVGL, TLS, the Flickr sync and the
+ * decoders' own scratch buffers all churning through PSRAM in between, it
+ * fragmented quickly: after a few minutes there'd be 440KB free yet no
+ * single 300KB block, and every photo failed with ESP_ERR_NO_MEM. Grabbed
+ * from ui_album_create() while PSRAM is still unfragmented; the retry here
+ * only matters if that very first attempt failed. */
+static uint16_t *canvas_get(void)
 {
-    if (s_pixel_buf) {
-        free(s_pixel_buf);
-        s_pixel_buf = NULL;
+    if (!s_canvas) {
+        size_t size = (size_t)BSP_LCD_H_RES * BSP_LCD_V_RES * sizeof(uint16_t);
+        s_canvas = heap_caps_malloc(size, MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT);
+        if (!s_canvas) {
+            ESP_LOGW(TAG, "out of PSRAM allocating the %ux%u photo canvas (%u bytes needed, largest free block %u)",
+                     BSP_LCD_H_RES, BSP_LCD_V_RES, (unsigned)size,
+                     (unsigned)heap_caps_get_largest_free_block(MALLOC_CAP_SPIRAM));
+        }
     }
+    return s_canvas;
 }
 
 /* Registered on LV_EVENT_SCREEN_UNLOADED (see ui_album_create()): fires
@@ -78,10 +92,7 @@ static void show_index_impl(size_t idx)
 {
     size_t count = app_photo_count();
     if (count == 0) {
-        /* s_img_dsc.data may point at s_pixel_buf - clear the source before
-         * freeing it so nothing can end up reading freed memory through it. */
         lv_image_set_src(s_img, NULL);
-        free_current_buf();
         lv_obj_add_flag(s_img, LV_OBJ_FLAG_HIDDEN);
         lv_gif_pause(s_gif);
         lv_obj_add_flag(s_gif, LV_OBJ_FLAG_HIDDEN);
@@ -94,11 +105,7 @@ static void show_index_impl(size_t idx)
     const char *path = app_photo_get_path(idx);
 
     if (app_photo_is_gif(path)) {
-        /* Same freed-before-hidden ordering as the count==0 case above,
-         * and for the same reason - s_img is about to sit hidden and
-         * pointed at nothing for a while, not immediately reassigned. */
         lv_image_set_src(s_img, NULL);
-        free_current_buf();
         lv_obj_add_flag(s_img, LV_OBJ_FLAG_HIDDEN);
 
         /* lv_gif reads through LVGL's own fs layer (see sdkconfig.defaults'
@@ -138,32 +145,23 @@ static void show_index_impl(size_t idx)
     lv_gif_pause(s_gif);
     lv_obj_add_flag(s_gif, LV_OBJ_FLAG_HIDDEN);
 
-    /* Free the *previous* photo's ~300KB canvas buffer before decoding the
-     * next one, not after - PSRAM is tight enough on this board (LVGL's own
-     * full-frame double buffer alone already holds ~600KB of it) that a
-     * decode which would otherwise fit can fail with ESP_ERR_NO_MEM just
-     * because the old buffer was still also alive at the same time. Detach
-     * s_img from it first, same as the count==0 case above, so nothing can
-     * end up reading freed memory through the still-set image source in the
-     * meantime (see that branch's comment) - if the decode below fails,
-     * s_img is left hidden rather than showing a stale/dangling frame. */
+    /* Detach s_img before overwriting the canvas it points at - if the
+     * decode below fails, s_img is left hidden rather than showing a
+     * half-overwritten frame. */
     lv_image_set_src(s_img, NULL);
-    free_current_buf();
 
-    uint16_t *buf = NULL;
-    if (app_photo_decode_to_canvas(idx, BSP_LCD_H_RES, BSP_LCD_V_RES, &buf) != ESP_OK) {
+    uint16_t *canvas = canvas_get();
+    if (!canvas || app_photo_decode_to_canvas(idx, canvas, BSP_LCD_H_RES, BSP_LCD_V_RES) != ESP_OK) {
         lv_obj_add_flag(s_img, LV_OBJ_FLAG_HIDDEN);
         return;
     }
-
-    s_pixel_buf = buf;
 
     s_img_dsc.header.w = BSP_LCD_H_RES;
     s_img_dsc.header.h = BSP_LCD_V_RES;
     s_img_dsc.header.cf = LV_COLOR_FORMAT_RGB565;
     s_img_dsc.header.stride = BSP_LCD_H_RES * 2;
     s_img_dsc.data_size = (size_t)BSP_LCD_H_RES * BSP_LCD_V_RES * 2;
-    s_img_dsc.data = (const uint8_t *)s_pixel_buf;
+    s_img_dsc.data = (const uint8_t *)canvas;
 
     /* Reassign the source (not just mutate the struct in place) so LVGL
      * doesn't skip the redraw thinking the source pointer is unchanged. */
@@ -237,6 +235,7 @@ lv_obj_t *ui_album_create(void)
     lv_obj_set_style_bg_opa(scr, LV_OPA_COVER, 0);
     lv_obj_set_style_pad_all(scr, 0, 0);
     lv_obj_set_style_border_width(scr, 0, 0);
+    canvas_get();
     lv_obj_add_event_cb(scr, screen_unloaded_cb, LV_EVENT_SCREEN_UNLOADED, NULL);
 
     s_img = lv_image_create(scr);
