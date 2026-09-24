@@ -271,6 +271,12 @@ static void ota_url_task(void *arg)
         .crt_bundle_attach = esp_crt_bundle_attach,
         .timeout_ms = 15000,
         .keep_alive_enable = true,
+        /* GitHub release downloads 302 to a signed release-assets URL of
+         * ~900 chars - the request line for that (and the Location header
+         * carrying it) overflows the default 512-byte buffers with
+         * "HTTP_CLIENT: Out of buffer". */
+        .buffer_size = 2048,
+        .buffer_size_tx = 2048,
     };
     esp_https_ota_config_t ota_config = {
         .http_config = &http_config,
