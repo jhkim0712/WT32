@@ -29,7 +29,11 @@ static const char *TAG = "app_ota";
 #define FIRMWARE_PROJECT_NAME "wt32_firmware"
 
 #define VALIDATE_HEADER_LEN 512
-#define GITHUB_JSON_MAX_LEN  8192
+/* A release's JSON is ~1.3KB per attached asset (each carries a full
+ * "uploader" object) plus the notes - the release workflow's five assets
+ * alone put it at ~12KB, past the 8KB this used to be. Only held briefly
+ * while parsing, and lands in PSRAM (over CONFIG_SPIRAM_MALLOC_ALWAYSINTERNAL). */
+#define GITHUB_JSON_MAX_LEN  (32 * 1024)
 
 static SemaphoreHandle_t s_lock;
 static app_ota_status_t s_status;
@@ -184,8 +188,15 @@ esp_err_t app_ota_check_github(const char *owner_repo,
         total += r;
     }
     body[total] = '\0';
+    bool truncated = total >= GITHUB_JSON_MAX_LEN - 1 && !esp_http_client_is_complete_data_received(client);
     esp_http_client_close(client);
     esp_http_client_cleanup(client);
+
+    if (truncated) {
+        ESP_LOGW(TAG, "GitHub API response is larger than %d bytes - raise GITHUB_JSON_MAX_LEN", GITHUB_JSON_MAX_LEN);
+        free(body);
+        return ESP_ERR_INVALID_SIZE;
+    }
 
     cJSON *root = cJSON_Parse(body);
     free(body);
